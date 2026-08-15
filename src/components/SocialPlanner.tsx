@@ -25,6 +25,32 @@ export const SocialPlanner: React.FC<SocialPlannerProps> = ({
   const [statusFilter, setStatusFilter] = useState<PostStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [previewPost, setPreviewPost] = useState<SocialPost | null>(null);
+  const [typefullyState, setTypefullyState] = useState<Record<string, 'sending' | 'sent'>>({});
+
+  const handleSendToTypefully = async (post: SocialPost) => {
+    if (typefullyState[post.id]) return;
+    setTypefullyState((prev) => ({ ...prev, [post.id]: 'sending' }));
+    try {
+      const res = await fetch('/api/typefully/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: post.content, scheduleToNextSlot: false }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Typefully dispatch failed');
+      }
+      setTypefullyState((prev) => ({ ...prev, [post.id]: 'sent' }));
+      onUpdateStatus(post.id, 'scheduled');
+    } catch (err: any) {
+      setTypefullyState((prev) => {
+        const next = { ...prev };
+        delete next[post.id];
+        return next;
+      });
+      alert(err.message || 'Typefully dispatch failed');
+    }
+  };
 
   // Filter posts
   const filteredPosts = posts.filter((post) => {
@@ -244,16 +270,27 @@ export const SocialPlanner: React.FC<SocialPlannerProps> = ({
                           </span>
 
                           <div className="flex items-center gap-2">
-                            {(post.platform === 'twitter' || post.platform === 'threads') && (
+                            {post.status !== 'published' && (
                               <button
-                                onClick={() => {
-                                  alert(`Post "${post.content.slice(0, 30)}..." successfully dispatched to Typefully Drafts Queue!`);
-                                  onUpdateStatus(post.id, 'scheduled');
-                                }}
-                                title="Dispatch draft to Typefully"
-                                className="text-[10px] font-mono text-sky-400 hover:text-sky-300 bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/80 flex items-center gap-1"
+                                onClick={() => handleSendToTypefully(post)}
+                                disabled={Boolean(typefullyState[post.id])}
+                                title="Send this post to your Typefully drafts"
+                                className={`text-[10px] font-mono px-2 py-0.5 rounded border flex items-center gap-1 transition-all ${
+                                  typefullyState[post.id] === 'sent'
+                                    ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80'
+                                    : 'text-sky-400 hover:text-sky-300 bg-sky-950/60 border-sky-800/80'
+                                }`}
                               >
-                                <Send className="w-2.5 h-2.5" /> Typefully
+                                {typefullyState[post.id] === 'sent' ? (
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                ) : (
+                                  <Send className="w-2.5 h-2.5" />
+                                )}
+                                {typefullyState[post.id] === 'sent'
+                                  ? 'In Typefully'
+                                  : typefullyState[post.id] === 'sending'
+                                    ? 'Sending…'
+                                    : 'Typefully'}
                               </button>
                             )}
                             {post.status !== 'published' && (

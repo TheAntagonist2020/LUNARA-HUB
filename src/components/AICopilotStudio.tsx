@@ -33,6 +33,16 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
   const [addedPostsMap, setAddedPostsMap] = useState<Record<string, boolean>>({});
   const [typefullySentMap, setTypefullySentMap] = useState<Record<string, boolean>>({});
   const [typefullyError, setTypefullyError] = useState<string | null>(null);
+  const [typefullyConnected, setTypefullyConnected] = useState<boolean | null>(null);
+  const [typefullyAutoSchedule, setTypefullyAutoSchedule] = useState(false);
+
+  // Check which integrations the local server actually has configured
+  React.useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => setTypefullyConnected(Boolean(data?.integrations?.typefullyKey)))
+      .catch(() => setTypefullyConnected(null));
+  }, []);
 
   const handlePushToTypefully = async (platform: PlatformType, content: string) => {
     setTypefullyError(null);
@@ -40,7 +50,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
       const res = await fetch('/api/typefully/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, scheduleToNextSlot: false }),
+        body: JSON.stringify({ content, scheduleToNextSlot: typefullyAutoSchedule }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -51,6 +61,26 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
       setTypefullyError(err.message || 'Typefully dispatch failed');
     }
   };
+
+  const renderTypefullyButton = (platform: PlatformType, content: string) => (
+    <button
+      onClick={() => handlePushToTypefully(platform, content)}
+      disabled={typefullySentMap[platform]}
+      title={
+        typefullyConnected === false
+          ? 'Typefully key not configured — see the banner above'
+          : 'Send this copy to your Typefully drafts'
+      }
+      className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+        typefullySentMap[platform]
+          ? 'bg-sky-950 text-sky-400 border border-sky-500/50'
+          : 'bg-sky-500 hover:bg-sky-400 text-black font-mono uppercase text-[10px]'
+      }`}
+    >
+      {typefullySentMap[platform] ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
+      {typefullySentMap[platform] ? 'Sent to Typefully' : '⚡ Typefully'}
+    </button>
+  );
 
   // Polisher Tool State
   const [polishDraft, setPolishDraft] = useState('');
@@ -219,6 +249,38 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Typefully Connection Status */}
+      {typefullyConnected === false && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-1.5">
+          <p className="font-bold flex items-center gap-2">
+            <Send className="w-4 h-4 shrink-0" />
+            Typefully is not connected yet — one step to fix:
+          </p>
+          <p className="text-amber-200/90 leading-relaxed pl-6">
+            Open <strong>typefully.com → Settings → Integrations → API</strong>, create an API key, then add{' '}
+            <code className="bg-zinc-950/80 px-1.5 py-0.5 rounded font-mono">TYPEFULLY_API_KEY=tf_...</code> to the{' '}
+            <code className="bg-zinc-950/80 px-1.5 py-0.5 rounded font-mono">.env</code> file in your LUNARA-HUB folder
+            and restart the app. The ⚡ Typefully buttons below will then send copy straight into your drafts.
+          </p>
+        </div>
+      )}
+      {typefullyConnected === true && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-xs">
+          <span className="flex items-center gap-2 text-sky-300 font-semibold">
+            <CheckCircle2 className="w-4 h-4" /> Typefully connected — dispatches go to your drafts
+          </span>
+          <label className="flex items-center gap-2 text-sky-200/90 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={typefullyAutoSchedule}
+              onChange={(e) => setTypefullyAutoSchedule(e.target.checked)}
+              className="rounded border-sky-700 bg-zinc-950 text-sky-400 focus:ring-0"
+            />
+            <span>Auto-schedule into next free queue slot</span>
+          </label>
+        </div>
+      )}
 
       {activeSubTab === 'generator' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -475,18 +537,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                         <PlatformIcon platform="twitter" /> X / Twitter Post Variant
                       </span>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handlePushToTypefully('twitter', aiResult.twitterCopy)}
-                          disabled={typefullySentMap['twitter']}
-                          className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                            typefullySentMap['twitter']
-                              ? 'bg-sky-950 text-sky-400 border border-sky-500/50'
-                              : 'bg-sky-500 hover:bg-sky-400 text-black font-mono uppercase text-[10px]'
-                          }`}
-                        >
-                          {typefullySentMap['twitter'] ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
-                          {typefullySentMap['twitter'] ? 'Sent to Typefully Drafts' : '⚡ Send to Typefully'}
-                        </button>
+                        {renderTypefullyButton('twitter', aiResult.twitterCopy)}
 
                         <button
                           onClick={() => handlePushToQueue('twitter', aiResult.twitterCopy)}
@@ -516,6 +567,8 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                       <span className="flex items-center gap-2 text-xs font-bold text-pink-400">
                         <PlatformIcon platform="instagram" /> Instagram Caption
                       </span>
+                      <div className="flex items-center gap-2">
+                      {renderTypefullyButton('instagram', aiResult.instagramCaption)}
                       <button
                         onClick={() => handlePushToQueue('instagram', aiResult.instagramCaption)}
                         disabled={addedPostsMap['instagram']}
@@ -528,6 +581,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                         {addedPostsMap['instagram'] ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
                         {addedPostsMap['instagram'] ? 'Added to Queue' : '+ Push to Queue'}
                       </button>
+                      </div>
                     </div>
 
                     <p className="text-xs text-zinc-200 font-serif leading-relaxed whitespace-pre-wrap">
@@ -543,6 +597,8 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                       <span className="flex items-center gap-2 text-xs font-bold text-emerald-400">
                         <PlatformIcon platform="letterboxd" /> Letterboxd Review
                       </span>
+                      <div className="flex items-center gap-2">
+                      {renderTypefullyButton('letterboxd', aiResult.letterboxdReview)}
                       <button
                         onClick={() => handlePushToQueue('letterboxd', aiResult.letterboxdReview)}
                         disabled={addedPostsMap['letterboxd']}
@@ -555,6 +611,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                         {addedPostsMap['letterboxd'] ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
                         {addedPostsMap['letterboxd'] ? 'Added to Queue' : '+ Push to Queue'}
                       </button>
+                      </div>
                     </div>
 
                     <p className="text-xs text-zinc-200 font-serif leading-relaxed whitespace-pre-wrap">
@@ -570,6 +627,8 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                       <span className="flex items-center gap-2 text-xs font-bold text-teal-300">
                         <PlatformIcon platform="tiktok" /> TikTok Reel Video Script
                       </span>
+                      <div className="flex items-center gap-2">
+                      {renderTypefullyButton('tiktok', aiResult.tikTokScript)}
                       <button
                         onClick={() => handlePushToQueue('tiktok', aiResult.tikTokScript)}
                         disabled={addedPostsMap['tiktok']}
@@ -582,6 +641,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                         {addedPostsMap['tiktok'] ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
                         {addedPostsMap['tiktok'] ? 'Added to Queue' : '+ Push to Queue'}
                       </button>
+                      </div>
                     </div>
 
                     <p className="text-xs text-zinc-200 font-serif leading-relaxed whitespace-pre-wrap">
