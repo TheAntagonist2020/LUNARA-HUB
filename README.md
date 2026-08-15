@@ -92,8 +92,7 @@ and which integrations are configured — useful when wiring up `.env`.
 ## Security notes
 
 - `.env` is gitignored — keys never leave your machine. Don't commit them.
-- An earlier version of this repo contained a hardcoded WordPress Application
-  Password in `src/components/InstanceConnectionsModal.tsx`. It has been
-  removed, but it lives in git history — if that password was real, **revoke
-  it** (WP Admin → Users → Profile → Application Passwords) and create a new
-  one.
+- The original AI Studio export shipped with fabricated sample credentials
+  hardcoded in `src/components/InstanceConnectionsModal.tsx` (a fake
+  WordPress Application Password and Typefully key). They were never real and
+  have been removed — real keys belong only in `.env`, never in source.
