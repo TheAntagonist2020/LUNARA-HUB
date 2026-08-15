@@ -216,7 +216,9 @@ export default function App() {
         return [...incoming.filter((e) => !prevSeen.has(e.articleUrl || e.id)), ...kept];
       });
       setPosts((prev) => prev.filter((p) => !isSampleId(p.id)));
-      setLiveActivities((prev) => prev.filter((a) => !isSampleId(a.id)));
+      // Every activity in this feed is simulator-generated (bundled samples or
+      // the demo ticker) — clear them all once real content is flowing.
+      setLiveActivities([]);
     }
     setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     return fresh.length;

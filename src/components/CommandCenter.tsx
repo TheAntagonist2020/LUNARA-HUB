@@ -32,13 +32,26 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   isSimulating,
   setIsSimulating,
 }) => {
-  // Calculated stats
-  const totalReach = posts.reduce((acc, p) => acc + (p.engagementStats.reach || 0), 0) + 1250000;
-  const totalLikes = posts.reduce((acc, p) => acc + (p.engagementStats.likes || 0), 0);
-  const totalClicks = posts.reduce((acc, p) => acc + (p.engagementStats.clicks || 0), 0) + 28400;
-  const avgEngagement = 12.4;
-
   const queuedPosts = posts.filter(p => p.status === 'scheduled' || p.status === 'queued');
+  const publishedPosts = posts.filter(p => p.status === 'published');
+
+  // Live integration status from the local server — the same source of truth
+  // as the terminal startup log, so the app and terminal always agree.
+  const [health, setHealth] = React.useState<any | null>(null);
+  React.useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then(setHealth)
+      .catch(() => setHealth(null));
+  }, []);
+
+  const aiEngineLabels: Record<string, string> = {
+    claude: 'Claude · Max plan',
+    gemini: 'Gemini · free tier',
+    template: 'Offline templates',
+  };
+  const aiEngine = health ? aiEngineLabels[health.aiProviderOrder?.[0]] || 'Offline templates' : '…';
+  const typefullyOn = Boolean(health?.integrations?.typefullyKey);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -56,7 +69,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             Journal Control & Media Hub
           </h1>
           <p className="text-zinc-400 text-xs max-w-xl leading-relaxed">
-            Real-time social reach, automated Gemini AI review synthesis, and cross-platform campaign deployment for LUNARA FILM.
+            Your lunarafilm.com journal, AI campaign synthesis on subscriptions you already pay for, and Typefully dispatch — all local, all $0 extra.
           </p>
         </div>
 
@@ -82,32 +95,36 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         </div>
       </div>
 
-      {/* Aggregate Reach Column Strip (Matching Sophisticated Dark Mockup) */}
+      {/* Real Status Strip — journal size, queue, and live integration state */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Total Impressions</p>
-          <p className="text-4xl font-serif text-[#D4AF37]">{(totalReach / 1000).toFixed(1)}k</p>
-          <p className="text-[10px] text-emerald-400 font-mono pt-1">+18.4% Weekly Growth</p>
-        </div>
-
-        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Engagement Rate</p>
-          <p className="text-4xl font-serif text-white">{avgEngagement}%</p>
-          <p className="text-[10px] text-zinc-400 font-mono pt-1">Optimal Cinephile Ratio</p>
-        </div>
-
-        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">LunaraFilm.com Clicks</p>
-          <p className="text-4xl font-serif text-white">{(totalClicks / 1000).toFixed(1)}k</p>
-          <p className="text-[10px] text-emerald-400 font-mono pt-1">Direct Article Traffic</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Journal Entries</p>
+          <p className="text-4xl font-serif text-[#D4AF37]">{journalEntries.length}</p>
+          <p className="text-[10px] text-zinc-400 font-mono pt-1">Synced from lunarafilm.com + local logs</p>
         </div>
 
         <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
           <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Active Queue</p>
-          <p className="text-4xl font-serif text-[#D4AF37]">{queuedPosts.length}</p>
+          <p className="text-4xl font-serif text-white">{queuedPosts.length}</p>
           <button onClick={onGoToPlanner} className="text-[10px] text-zinc-400 hover:text-[#D4AF37] font-mono pt-1 flex items-center gap-1">
-            View Editorial Calendar →
+            View Planner → {publishedPosts.length > 0 ? `(${publishedPosts.length} published)` : ''}
           </button>
+        </div>
+
+        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">AI Engine</p>
+          <p className="text-2xl font-serif text-white pt-2">{aiEngine}</p>
+          <p className="text-[10px] text-emerald-400 font-mono pt-1">$0 extra — uses what you already pay for</p>
+        </div>
+
+        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Typefully</p>
+          <p className={`text-2xl font-serif pt-2 ${typefullyOn ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            {health === null ? '…' : typefullyOn ? 'Connected' : 'Not connected'}
+          </p>
+          <p className="text-[10px] text-zinc-400 font-mono pt-1">
+            {typefullyOn ? 'Dispatches land in your drafts queue' : 'Add TYPEFULLY_API_KEY to .env'}
+          </p>
         </div>
       </div>
 
@@ -134,6 +151,16 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           </div>
 
           <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+            {posts.length === 0 && (
+              <div className="py-12 text-center space-y-3">
+                <Sparkles className="w-7 h-7 text-[#D4AF37]/60 mx-auto" />
+                <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                  Your queue is empty. Pick a review in the spotlight below and hit
+                  <span className="text-[#D4AF37] font-semibold"> Generate Social Posts</span> —
+                  the AI drafts the campaign, then push it to your queue or straight to Typefully.
+                </p>
+              </div>
+            )}
             {posts.slice(0, 5).map((post) => (
               <div
                 key={post.id}
@@ -188,13 +215,24 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           <div>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-4">
               <h2 className="text-xs uppercase tracking-[0.3em] text-zinc-400 font-semibold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#D4AF37] animate-ping" />
+                <span className={`w-2 h-2 rounded-full bg-[#D4AF37] ${isSimulating ? 'animate-ping' : ''}`} />
                 Signal Flow
               </h2>
-              <span className="text-[10px] font-mono text-emerald-400 uppercase">Live Webhook</span>
+              <span className={`text-[10px] font-mono uppercase ${isSimulating ? 'text-amber-400' : 'text-zinc-500'}`}>
+                {isSimulating ? 'Demo stream' : 'Off'}
+              </span>
             </div>
 
             <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1">
+              {liveActivities.length === 0 && (
+                <div className="py-10 text-center space-y-2">
+                  <Radio className="w-6 h-6 text-zinc-600 mx-auto" />
+                  <p className="text-xs text-zinc-400 max-w-[260px] mx-auto leading-relaxed">
+                    Real per-post engagement needs each platform's API and isn't wired up yet.
+                    Toggle <span className="text-zinc-200 font-mono text-[10px]">SIGNAL</span> above to run a demo stream.
+                  </p>
+                </div>
+              )}
               {liveActivities.slice(0, 6).map((act) => (
                 <div key={act.id} className="border-l-2 border-[#D4AF37] pl-4 py-1 space-y-0.5 group">
                   <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 uppercase">
@@ -210,9 +248,8 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
-            <span>Encryption: AES-256</span>
-            <span>Cloud Sync: Active</span>
+          <div className="mt-6 pt-4 border-t border-zinc-800 text-[10px] text-zinc-500 font-mono text-center">
+            <span>{isSimulating ? 'Simulated engagement for layout preview — not real data' : 'Feed idle'}</span>
           </div>
         </div>
 
@@ -226,7 +263,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               <span>LUNARA Film Journal Spotlight</span>
             </h2>
             <p className="text-xs text-zinc-500">
-              Transform logged movie reviews into multi-platform social media posts via Gemini AI.
+              Transform logged movie reviews into multi-platform social media posts with your AI copilot.
             </p>
           </div>
           <button
