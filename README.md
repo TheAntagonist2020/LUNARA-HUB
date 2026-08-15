@@ -69,6 +69,20 @@ published posts (`review`, `journal`, and standard posts) through the public
 WordPress.com REST API into the journal — no credentials needed for published
 content. Change the source with `WP_SITE` / `WP_POST_TYPES` in `.env`.
 
+## Featured images & the media vault
+
+`POST /api/wordpress/featured-image` with `{ "postId": 123, "postType": "journal", "imageUrl": "https://...jpg", "alt": "..." }` makes the hub:
+
+1. download the image from the URL,
+2. **save a backup copy to `media-vault/YYYY-MM/` on your machine** (always, even if the upload fails),
+3. upload it to your WordPress media library, and
+4. set it as that post's featured image.
+
+Steps 3–4 need a one-time setup: create an Application Password in
+**wp-admin → Users → Profile → Application Passwords** and put
+`WP_USERNAME` + `WP_APP_PASSWORD` in `.env`. The `media-vault/` folder is
+gitignored — it's your local archive of every asset that ships to the site.
+
 ## Typefully dispatch (your existing Typefully account)
 
 Get an API key from **Typefully → Settings → Integrations → API** and set

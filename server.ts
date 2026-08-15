@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -380,6 +381,7 @@ app.get("/api/health", async (_req, res) => {
       geminiKey: Boolean(process.env.GEMINI_API_KEY),
       typefullyKey: Boolean(process.env.TYPEFULLY_API_KEY),
       wordpressSite: process.env.WP_SITE || "lunarafilm.com",
+      wordpressWrite: Boolean(process.env.WP_USERNAME && process.env.WP_APP_PASSWORD),
     },
   });
 });
@@ -517,6 +519,127 @@ app.get("/api/wordpress/journal", async (_req, res) => {
   } catch (error: any) {
     console.error("WordPress sync error:", error);
     res.status(502).json({ error: error.message || `Failed to fetch posts from ${WP_SITE}.` });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Media pipeline — pull official key art / trailer stills from a URL, keep a
+// local backup copy in the media vault, upload to the WordPress media
+// library, and set it as a post's featured image. Uploading needs
+// WP_USERNAME + WP_APP_PASSWORD in .env (create an Application Password in
+// wp-admin → Users → Profile → Application Passwords). The vault backup
+// happens regardless, so the original asset is never lost.
+// ---------------------------------------------------------------------------
+
+const MEDIA_VAULT_DIR = process.env.MEDIA_VAULT_DIR || path.join(process.cwd(), "media-vault");
+
+app.post("/api/wordpress/featured-image", async (req, res) => {
+  const { postId, postType, imageUrl, alt, filename } = req.body || {};
+  if (!imageUrl) {
+    return res.status(400).json({ error: "imageUrl is required." });
+  }
+
+  try {
+    const imgRes = await fetch(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (LUNARA Hub media pipeline)" },
+    });
+    if (!imgRes.ok) {
+      return res.status(502).json({ error: `Could not download image (HTTP ${imgRes.status}) from ${imageUrl}` });
+    }
+    const contentType = (imgRes.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+    if (!contentType.startsWith("image/")) {
+      return res.status(400).json({ error: `URL did not return an image (got ${contentType}).` });
+    }
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+
+    // Local backup first — the vault copy survives even if the upload fails.
+    const ext = contentType.includes("png")
+      ? "png"
+      : contentType.includes("webp")
+        ? "webp"
+        : contentType.includes("gif")
+          ? "gif"
+          : "jpg";
+    const baseName = (filename || new URL(imageUrl).pathname.split("/").pop() || "image")
+      .replace(/\.(jpe?g|png|webp|gif)$/i, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "-")
+      .slice(0, 80) || "image";
+    const vaultDir = path.join(MEDIA_VAULT_DIR, new Date().toISOString().slice(0, 7));
+    fs.mkdirSync(vaultDir, { recursive: true });
+    const vaultPath = path.join(vaultDir, `${Date.now()}-${baseName}.${ext}`);
+    fs.writeFileSync(vaultPath, buffer);
+
+    const user = process.env.WP_USERNAME;
+    const appPassword = process.env.WP_APP_PASSWORD;
+    if (!user || !appPassword) {
+      return res.status(503).json({
+        error:
+          "WP_USERNAME / WP_APP_PASSWORD not set — the image WAS saved to your local media vault, but not uploaded. Create an Application Password (wp-admin → Users → Profile → Application Passwords) and add both to .env.",
+        vaultPath,
+      });
+    }
+
+    const auth = "Basic " + Buffer.from(`${user}:${appPassword}`).toString("base64");
+    const apiBase = `https://${WP_SITE}/wp-json/wp/v2`;
+
+    const uploadRes = await fetch(`${apiBase}/media`, {
+      method: "POST",
+      headers: {
+        Authorization: auth,
+        "Content-Type": contentType,
+        "Content-Disposition": `attachment; filename="${baseName}.${ext}"`,
+      },
+      body: buffer,
+    });
+    const uploadText = await uploadRes.text();
+    if (!uploadRes.ok) {
+      return res.status(uploadRes.status).json({
+        error: `WordPress media upload failed (${uploadRes.status}): ${uploadText.slice(0, 300)}`,
+        vaultPath,
+      });
+    }
+    const media = JSON.parse(uploadText);
+
+    if (alt) {
+      await fetch(`${apiBase}/media/${media.id}`, {
+        method: "POST",
+        headers: { Authorization: auth, "Content-Type": "application/json" },
+        body: JSON.stringify({ alt_text: alt }),
+      }).catch(() => {});
+    }
+
+    let featuredSet = false;
+    if (postId) {
+      // CPTs like "journal" and "review" use their slug as the REST base.
+      const restBase = postType || "posts";
+      const postRes = await fetch(`${apiBase}/${restBase}/${postId}`, {
+        method: "POST",
+        headers: { Authorization: auth, "Content-Type": "application/json" },
+        body: JSON.stringify({ featured_media: media.id }),
+      });
+      if (!postRes.ok) {
+        const t = await postRes.text();
+        return res.status(postRes.status).json({
+          error: `Media uploaded (ID ${media.id}) but setting the featured image failed: ${t.slice(0, 300)}`,
+          mediaId: media.id,
+          mediaUrl: media.source_url,
+          vaultPath,
+        });
+      }
+      featuredSet = true;
+    }
+
+    res.json({
+      success: true,
+      mediaId: media.id,
+      mediaUrl: media.source_url,
+      featuredSet,
+      postId: postId || null,
+      vaultPath,
+    });
+  } catch (error: any) {
+    console.error("Featured image pipeline error:", error);
+    res.status(500).json({ error: error.message || "Featured image pipeline failed." });
   }
 });
 
