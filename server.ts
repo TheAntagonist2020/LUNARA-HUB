@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import { execFile } from "child_process";
+import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -24,43 +24,89 @@ app.use(express.json());
 type ProviderName = "claude" | "gemini" | "template";
 
 const CLAUDE_CLI = process.env.CLAUDE_CLI || "claude";
-let claudeCliAvailable: boolean | null = null;
+// npm on Windows installs the CLI as a claude.cmd shim, which Node can only
+// launch through a shell. Only fixed args ever reach the shell — the prompt
+// travels over stdin, so no user content needs shell escaping.
+const NEEDS_SHELL = process.platform === "win32";
 
-function checkClaudeCli(): Promise<boolean> {
-  if (claudeCliAvailable !== null) return Promise.resolve(claudeCliAvailable);
-  return new Promise((resolve) => {
-    execFile(CLAUDE_CLI, ["--version"], { timeout: 10000 }, (err) => {
-      claudeCliAvailable = !err;
-      resolve(claudeCliAvailable);
+let claudeCliAvailable = false;
+let claudeCliCheckedAt = 0;
+
+function spawnClaudeCli(args: string[], stdin: string | null, timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(CLAUDE_CLI, args, { shell: NEEDS_SHELL, windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error(`Claude CLI timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
     });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code !== 0) {
+        return reject(new Error(`Claude CLI exited with code ${code}: ${stderr.slice(0, 300)}`));
+      }
+      resolve(stdout);
+    });
+
+    if (stdin !== null) {
+      child.stdin.write(stdin);
+    }
+    child.stdin.end();
   });
 }
 
-function runClaudeCli(prompt: string): Promise<string> {
-  const args = ["-p", prompt, "--output-format", "json"];
+async function checkClaudeCli(): Promise<boolean> {
+  // Re-check a negative result every 60s so installing the CLI while the
+  // server is running gets picked up without a restart.
+  if (claudeCliAvailable || Date.now() - claudeCliCheckedAt < 60000) {
+    return claudeCliAvailable;
+  }
+  claudeCliCheckedAt = Date.now();
+  try {
+    await spawnClaudeCli(["--version"], null, 10000);
+    claudeCliAvailable = true;
+  } catch {
+    claudeCliAvailable = false;
+  }
+  return claudeCliAvailable;
+}
+
+async function runClaudeCli(prompt: string): Promise<string> {
+  const args = ["-p", "--output-format", "json"];
   if (process.env.CLAUDE_MODEL) {
     args.push("--model", process.env.CLAUDE_MODEL);
   }
-  return new Promise((resolve, reject) => {
-    execFile(
-      CLAUDE_CLI,
-      args,
-      { timeout: 180000, maxBuffer: 10 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) return reject(err);
-        try {
-          const envelope = JSON.parse(stdout);
-          if (envelope.is_error) {
-            return reject(new Error(envelope.result || "Claude CLI returned an error"));
-          }
-          resolve(String(envelope.result ?? ""));
-        } catch {
-          // Older CLI versions may emit plain text.
-          resolve(stdout);
-        }
-      }
-    );
-  });
+  const stdout = await spawnClaudeCli(args, prompt, 180000);
+  let envelope: any = null;
+  try {
+    envelope = JSON.parse(stdout);
+  } catch {
+    // Older CLI versions may emit plain text instead of a JSON envelope.
+    return stdout;
+  }
+  if (envelope && typeof envelope === "object") {
+    if (envelope.is_error) {
+      throw new Error(String(envelope.result || "Claude CLI returned an error"));
+    }
+    return String(envelope.result ?? "");
+  }
+  return stdout;
 }
 
 // Model text may arrive fenced or with prose around it — carve out the JSON object.
