@@ -33,8 +33,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_LIVE_ACTIVITIES;
   });
 
-  // Ticker Simulation Toggle
-  const [isSimulating, setIsSimulating] = useState<boolean>(true);
+  // Ticker Simulation Toggle — off by default so the dashboard only shows
+  // real data; the LIVE FEED button in the header turns the demo stream on.
+  const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Just now');
 
   // Modals & Selected States
@@ -192,6 +193,11 @@ export default function App() {
     setActiveTab('copilot');
   };
 
+  // Bundled sample/demo records use short numeric ids (film-1, post-101, act-5);
+  // anything the user creates gets a 13-digit timestamp id, so this test only
+  // ever matches the demo data.
+  const isSampleId = (id: string) => /^(film|post|act)-\d{1,6}$/.test(id);
+
   // Pull published posts from the live WordPress site (free with the existing plan)
   const handleSyncFromWordPress = async (): Promise<number> => {
     const res = await fetch('/api/wordpress/journal');
@@ -202,15 +208,26 @@ export default function App() {
     const incoming: FilmJournalEntry[] = data.entries || [];
     const seen = new Set(journalEntries.map((e) => e.articleUrl || e.id));
     const fresh = incoming.filter((e) => !seen.has(e.articleUrl || e.id));
-    if (fresh.length > 0) {
+    if (incoming.length > 0) {
+      // Real site content is in — retire the bundled sample/demo data.
       setJournalEntries((prev) => {
-        const prevSeen = new Set(prev.map((e) => e.articleUrl || e.id));
-        return [...fresh.filter((e) => !prevSeen.has(e.articleUrl || e.id)), ...prev];
+        const kept = prev.filter((e) => !isSampleId(e.id));
+        const prevSeen = new Set(kept.map((e) => e.articleUrl || e.id));
+        return [...incoming.filter((e) => !prevSeen.has(e.articleUrl || e.id)), ...kept];
       });
+      setPosts((prev) => prev.filter((p) => !isSampleId(p.id)));
+      setLiveActivities((prev) => prev.filter((a) => !isSampleId(a.id)));
     }
     setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     return fresh.length;
   };
+
+  // Auto-sync the journal from the live site on startup, silently — the
+  // Journal tab's sync button stays available for manual refreshes.
+  useEffect(() => {
+    handleSyncFromWordPress().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-amber-500/30 selection:text-amber-200">
