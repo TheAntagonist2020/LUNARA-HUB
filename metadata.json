@@ -1,0 +1,6 @@
+{
+  "name": "LUNARA FILM Hub",
+  "description": "Standalone film journal hub and real-time social media engagement control center for LUNARA FILM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
