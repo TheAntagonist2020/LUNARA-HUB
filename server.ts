@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import { execFile } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -7,152 +8,531 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
-// Initialize Gemini AI SDK securely on server side
-let ai: GoogleGenAI | null = null;
+// ---------------------------------------------------------------------------
+// AI PROVIDER CHAIN — cheapest-first, using what you already pay for:
+//   1. "claude"   — Claude Code CLI headless mode. Covered by your existing
+//                   Claude subscription (no per-token API billing).
+//   2. "gemini"   — Google AI Studio key on the free tier.
+//   3. "template" — deterministic offline templates. Always works, costs $0.
+// Force a specific provider with AI_PROVIDER=claude|gemini|template (default: auto).
+// ---------------------------------------------------------------------------
+
+type ProviderName = "claude" | "gemini" | "template";
+
+const CLAUDE_CLI = process.env.CLAUDE_CLI || "claude";
+let claudeCliAvailable: boolean | null = null;
+
+function checkClaudeCli(): Promise<boolean> {
+  if (claudeCliAvailable !== null) return Promise.resolve(claudeCliAvailable);
+  return new Promise((resolve) => {
+    execFile(CLAUDE_CLI, ["--version"], { timeout: 10000 }, (err) => {
+      claudeCliAvailable = !err;
+      resolve(claudeCliAvailable);
+    });
+  });
+}
+
+function runClaudeCli(prompt: string): Promise<string> {
+  const args = ["-p", prompt, "--output-format", "json"];
+  if (process.env.CLAUDE_MODEL) {
+    args.push("--model", process.env.CLAUDE_MODEL);
+  }
+  return new Promise((resolve, reject) => {
+    execFile(
+      CLAUDE_CLI,
+      args,
+      { timeout: 180000, maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return reject(err);
+        try {
+          const envelope = JSON.parse(stdout);
+          if (envelope.is_error) {
+            return reject(new Error(envelope.result || "Claude CLI returned an error"));
+          }
+          resolve(String(envelope.result ?? ""));
+        } catch {
+          // Older CLI versions may emit plain text.
+          resolve(stdout);
+        }
+      }
+    );
+  });
+}
+
+// Model text may arrive fenced or with prose around it — carve out the JSON object.
+function extractJsonObject(text: string): any {
+  const cleaned = text.replace(/```(?:json)?/gi, "");
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("No JSON object found in model output");
+  }
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+let gemini: GoogleGenAI | null = null;
 function getGeminiAI() {
-  if (!ai && process.env.GEMINI_API_KEY) {
-    ai = new GoogleGenAI({
+  if (!gemini && process.env.GEMINI_API_KEY) {
+    gemini = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
       httpOptions: {
         headers: {
-          "User-Agent": "aistudio-build",
+          "User-Agent": "lunara-film-hub-local",
         },
       },
     });
   }
-  return ai;
+  return gemini;
 }
 
-// Health Check API
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
-// Gemini Social Copy Generation
-app.post("/api/gemini/generate-social", async (req, res) => {
-  try {
-    const { filmTitle, director, rating, journalNotes, targetPlatforms, tone, articleUrl } = req.body;
+async function resolveProviderOrder(): Promise<ProviderName[]> {
+  const pref = (process.env.AI_PROVIDER || "auto").toLowerCase();
+  if (pref === "claude") return ["claude", "template"];
+  if (pref === "gemini") return ["gemini", "template"];
+  if (pref === "template") return ["template"];
+  const order: ProviderName[] = [];
+  if (await checkClaudeCli()) order.push("claude");
+  if (process.env.GEMINI_API_KEY) order.push("gemini");
+  order.push("template");
+  return order;
+}
 
-    const gemini = getGeminiAI();
-    if (!gemini) {
-      return res.status(503).json({
-        error: "GEMINI_API_KEY is not configured in secrets. Using smart fallback template generation.",
-        fallback: true
-      });
-    }
+// ---------------------------------------------------------------------------
+// Social campaign generation
+// ---------------------------------------------------------------------------
 
-    const prompt = `You are the lead Social Media Director and Chief Film Critic at LUNARA FILM (a sleek, high-brow yet accessible film journal & editorial website).
+interface SocialParams {
+  filmTitle?: string;
+  director?: string;
+  rating?: number;
+  journalNotes?: string;
+  targetPlatforms?: string[];
+  tone?: string;
+  articleUrl?: string;
+}
+
+function socialPromptBody(p: SocialParams): string {
+  return `You are the lead Social Media Director and Chief Film Critic at LUNARA FILM (a sleek, high-brow yet accessible film journal & editorial website).
 Create social media post variations for LUNARA FILM's social media platforms.
 
 Film Details:
-- Title: ${filmTitle || "Untitled Film"}
-- Director: ${director || "N/A"}
-- Star Rating: ${rating ? `${rating}/5 Stars` : "Not rated"}
-- Film Journal Notes/Review Snippet: ${journalNotes || "General film coverage and review."}
-- Tone Strategy: ${tone || "Cinephile Editorial"}
-- LUNARA FILM Website Link: ${articleUrl || "https://lunarafilm.com/reviews/latest"}
-- Target Platforms requested: ${(targetPlatforms || ["Twitter/X", "Instagram", "Letterboxd", "TikTok"]).join(", ")}
+- Title: ${p.filmTitle || "Untitled Film"}
+- Director: ${p.director || "N/A"}
+- Star Rating: ${p.rating ? `${p.rating}/5 Stars` : "Not rated"}
+- Film Journal Notes/Review Snippet: ${p.journalNotes || "General film coverage and review."}
+- Tone Strategy: ${p.tone || "Cinephile Editorial"}
+- LUNARA FILM Website Link: ${p.articleUrl || "https://lunarafilm.com/reviews/latest"}
+- Target Platforms requested: ${(p.targetPlatforms || ["Twitter/X", "Instagram", "Letterboxd", "TikTok"]).join(", ")}
 
-Generate tailored posts in structured JSON format with:
+Generate tailored posts with:
 1. twitterCopy: Punchy X/Twitter post or thread hook (under 280 chars, stylish, film-nerd aesthetic).
 2. instagramCaption: Engaging Instagram carousel/photo caption with formatting, paragraph breaks, and strong CTA to link in bio.
 3. letterboxdReview: Sophisticated, sharp Letterboxd review snippet or log comment.
 4. tikTokScript: A 15-30 second video script outline (Hook, On-screen text, Visual cue, Audio cue).
 5. hashtags: Array of 5-8 relevant trending and niche film hashtags (e.g., #LunaraFilm, #Cinema, etc.).
 6. engagementScore: Estimated viral potential score from 1-100.
-7. engagementAdvice: 1 sentence advice on optimal timing or image asset pairing for max reach.
-`;
+7. engagementAdvice: 1 sentence advice on optimal timing or image asset pairing for max reach.`;
+}
 
-    const response = await gemini.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: "You strictly output clean JSON adhering to the structure requested.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            twitterCopy: { type: Type.STRING },
-            instagramCaption: { type: Type.STRING },
-            letterboxdReview: { type: Type.STRING },
-            tikTokScript: { type: Type.STRING },
-            hashtags: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            engagementScore: { type: Type.NUMBER },
-            engagementAdvice: { type: Type.STRING }
-          },
-          required: ["twitterCopy", "instagramCaption", "letterboxdReview", "tikTokScript", "hashtags", "engagementScore", "engagementAdvice"]
-        }
-      }
-    });
+const SOCIAL_REQUIRED_KEYS = [
+  "twitterCopy",
+  "instagramCaption",
+  "letterboxdReview",
+  "tikTokScript",
+  "hashtags",
+  "engagementScore",
+  "engagementAdvice",
+];
 
-    const resultText = response.text;
-    if (!resultText) {
-      throw new Error("No response generated from Gemini.");
+function validateKeys(obj: any, keys: string[]) {
+  for (const key of keys) {
+    if (obj[key] === undefined || obj[key] === null) {
+      throw new Error(`Model output missing required key: ${key}`);
     }
+  }
+  return obj;
+}
 
-    const parsed = JSON.parse(resultText);
-    res.json({ success: true, data: parsed });
+function templateSocial(p: SocialParams) {
+  const title = p.filmTitle || "Untitled Film";
+  const notes = p.journalNotes || "A film worth your attention.";
+  const rating = p.rating || 4.5;
+  const url = p.articleUrl || "https://lunarafilm.com/reviews/latest";
+  const stars = "★".repeat(Math.max(1, Math.min(5, Math.round(rating))));
+  return {
+    twitterCopy: `${title}${p.director ? ` (dir. ${p.director})` : ""} — the LUNARA FILM verdict: ${notes.slice(0, 140)}${notes.length > 140 ? "…" : ""}\n\nFull essay: ${url}`,
+    instagramCaption: `🎬 LUNARA FILM REVIEW: ${title.toUpperCase()}\n\n${notes}\n\nRating: ${rating}/5 ${stars}\n\nLink in bio for the full deep dive.`,
+    letterboxdReview: `${stars} — "${notes.slice(0, 180)}${notes.length > 180 ? "…" : ""}" — LUNARA FILM Review.`,
+    tikTokScript: `Hook: "Why ${title} deserves your next movie night."\nOn-screen text: LUNARA FILM Review — ${rating}/5\nVisual cue: Poster pan + key still frames\nAudio cue: Atmospheric cinematic bass`,
+    hashtags: [
+      "#LunaraFilm",
+      "#MovieReview",
+      "#Cinephile",
+      "#FilmTwitter",
+      `#${title.replace(/[^a-zA-Z0-9]/g, "")}`,
+    ],
+    engagementScore: 88,
+    engagementAdvice: "Post at 6:00 PM local time with a high-contrast still for peak cinephile engagement.",
+  };
+}
+
+async function generateSocialCopy(params: SocialParams): Promise<{ provider: ProviderName; data: any }> {
+  const order = await resolveProviderOrder();
+  let lastError: Error | null = null;
+
+  for (const provider of order) {
+    try {
+      if (provider === "claude") {
+        const prompt = `${socialPromptBody(params)}
+
+Respond with ONLY a valid JSON object — no markdown fences, no commentary — with exactly these keys:
+{"twitterCopy": string, "instagramCaption": string, "letterboxdReview": string, "tikTokScript": string, "hashtags": string[], "engagementScore": number, "engagementAdvice": string}`;
+        const raw = await runClaudeCli(prompt);
+        const data = validateKeys(extractJsonObject(raw), SOCIAL_REQUIRED_KEYS);
+        return { provider, data };
+      }
+
+      if (provider === "gemini") {
+        const ai = getGeminiAI();
+        if (!ai) throw new Error("GEMINI_API_KEY not configured");
+        const response = await ai.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: socialPromptBody(params),
+          config: {
+            systemInstruction: "You strictly output clean JSON adhering to the structure requested.",
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                twitterCopy: { type: Type.STRING },
+                instagramCaption: { type: Type.STRING },
+                letterboxdReview: { type: Type.STRING },
+                tikTokScript: { type: Type.STRING },
+                hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                engagementScore: { type: Type.NUMBER },
+                engagementAdvice: { type: Type.STRING },
+              },
+              required: SOCIAL_REQUIRED_KEYS,
+            },
+          },
+        });
+        if (!response.text) throw new Error("No response generated from Gemini.");
+        return { provider, data: JSON.parse(response.text) };
+      }
+
+      return { provider: "template", data: templateSocial(params) };
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[ai] provider "${provider}" failed: ${err.message} — trying next`);
+    }
+  }
+
+  throw lastError || new Error("All AI providers failed");
+}
+
+// ---------------------------------------------------------------------------
+// Copy polishing
+// ---------------------------------------------------------------------------
+
+interface PolishParams {
+  draftText?: string;
+  platform?: string;
+  goal?: string;
+}
+
+function polishPromptBody(p: PolishParams): string {
+  return `Refine and polish this social draft for LUNARA FILM for platform: ${p.platform || "Twitter"}.
+Goal: ${p.goal || "Increase engagement and sound authoritative yet passionate about cinema"}.
+
+Draft:
+"${p.draftText}"
+
+Provide 3 distinct polished versions:
+1. concise: Short, punchy, scroll-stopping.
+2. editorial: Deep, analytical, cinephile depth.
+3. provocative: High engagement, conversation starter / hot take angle.`;
+}
+
+const POLISH_REQUIRED_KEYS = ["concise", "editorial", "provocative"];
+
+function templatePolish(p: PolishParams) {
+  const draft = (p.draftText || "").trim();
+  return {
+    concise: draft.length > 140 ? `${draft.slice(0, 137)}…` : draft,
+    editorial: `LUNARA ANALYSIS: ${draft}`,
+    provocative: `HOT TAKE: ${draft} — agree, or meet us in the replies?`,
+  };
+}
+
+async function polishCopy(params: PolishParams): Promise<{ provider: ProviderName; data: any }> {
+  const order = await resolveProviderOrder();
+  let lastError: Error | null = null;
+
+  for (const provider of order) {
+    try {
+      if (provider === "claude") {
+        const prompt = `${polishPromptBody(params)}
+
+Respond with ONLY a valid JSON object — no markdown fences, no commentary — with exactly these keys:
+{"concise": string, "editorial": string, "provocative": string}`;
+        const raw = await runClaudeCli(prompt);
+        const data = validateKeys(extractJsonObject(raw), POLISH_REQUIRED_KEYS);
+        return { provider, data };
+      }
+
+      if (provider === "gemini") {
+        const ai = getGeminiAI();
+        if (!ai) throw new Error("GEMINI_API_KEY not configured");
+        const response = await ai.models.generateContent({
+          model: GEMINI_MODEL,
+          contents: polishPromptBody(params),
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                concise: { type: Type.STRING },
+                editorial: { type: Type.STRING },
+                provocative: { type: Type.STRING },
+              },
+              required: POLISH_REQUIRED_KEYS,
+            },
+          },
+        });
+        return { provider, data: JSON.parse(response.text || "{}") };
+      }
+
+      return { provider: "template", data: templatePolish(params) };
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[ai] provider "${provider}" failed: ${err.message} — trying next`);
+    }
+  }
+
+  throw lastError || new Error("All AI providers failed");
+}
+
+// ---------------------------------------------------------------------------
+// API routes — original /api/gemini/* paths kept for frontend compatibility,
+// /api/ai/* aliases added since the backing provider may not be Gemini.
+// ---------------------------------------------------------------------------
+
+app.get("/api/health", async (_req, res) => {
+  const order = await resolveProviderOrder();
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    aiProviderOrder: order,
+    integrations: {
+      claudeCli: order.includes("claude"),
+      geminiKey: Boolean(process.env.GEMINI_API_KEY),
+      typefullyKey: Boolean(process.env.TYPEFULLY_API_KEY),
+      wordpressSite: process.env.WP_SITE || "lunarafilm.com",
+    },
+  });
+});
+
+app.post(["/api/gemini/generate-social", "/api/ai/generate-social"], async (req, res) => {
+  try {
+    const { provider, data } = await generateSocialCopy(req.body || {});
+    res.json({ success: true, provider, data });
   } catch (error: any) {
     console.error("Error generating social copy:", error);
     res.status(500).json({ error: error.message || "Failed to generate social copy." });
   }
 });
 
-// Gemini Copy Polisher / Optimizer
-app.post("/api/gemini/polish-copy", async (req, res) => {
+app.post(["/api/gemini/polish-copy", "/api/ai/polish-copy"], async (req, res) => {
   try {
-    const { draftText, platform, goal } = req.body;
-
-    const gemini = getGeminiAI();
-    if (!gemini) {
-      return res.status(503).json({ error: "GEMINI_API_KEY missing." });
+    if (!req.body?.draftText) {
+      return res.status(400).json({ error: "draftText is required." });
     }
-
-    const prompt = `Refine and polish this social draft for LUNARA FILM for platform: ${platform || "Twitter"}.
-Goal: ${goal || "Increase engagement and sound authoritative yet passionate about cinema"}.
-
-Draft:
-"${draftText}"
-
-Provide 3 distinct polished versions in JSON:
-1. concise: Short, punchy, scroll-stopping.
-2. editorial: Deep, analytical, cinephile depth.
-3. provocative: High engagement, conversation starter / hot take angle.
-`;
-
-    const response = await gemini.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            concise: { type: Type.STRING },
-            editorial: { type: Type.STRING },
-            provocative: { type: Type.STRING }
-          },
-          required: ["concise", "editorial", "provocative"]
-        }
-      }
-    });
-
-    const parsed = JSON.parse(response.text || "{}");
-    res.json({ success: true, data: parsed });
+    const { provider, data } = await polishCopy(req.body);
+    res.json({ success: true, provider, data });
   } catch (error: any) {
     console.error("Error polishing copy:", error);
     res.status(500).json({ error: error.message || "Failed to polish copy." });
   }
 });
 
+// ---------------------------------------------------------------------------
+// WordPress journal sync — pulls published posts from your live WordPress.com
+// site over its public REST API. Free with the plan you already pay for; no
+// credentials required for published content.
+// ---------------------------------------------------------------------------
+
+const WP_SITE = process.env.WP_SITE || "lunarafilm.com";
+const WP_POST_TYPES = (process.env.WP_POST_TYPES || "review,journal,posts")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function stripHtml(html: string): string {
+  return (html || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#(\d+);/g, (_m, d) => String.fromCharCode(Number(d)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&(?:#8217|rsquo|#8216|lsquo);/g, "'")
+    .replace(/&(?:#8220|ldquo|#8221|rdquo);/g, '"')
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchWpCollection(baseUrl: string, postType: string): Promise<any[]> {
+  try {
+    const url = `${baseUrl}/${postType}?per_page=20&_embed=1`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function mapWpPostToJournalEntry(post: any, postType: string) {
+  const embedded = post._embedded || {};
+  const featuredMedia = embedded["wp:featuredmedia"]?.[0]?.source_url;
+  const terms: string[] = Array.from(
+    new Set(
+      (embedded["wp:term"] || [])
+        .flat()
+        .map((t: any) => t?.name)
+        .filter(Boolean)
+    )
+  ).slice(0, 6) as string[];
+  const excerpt = stripHtml(post.excerpt?.rendered || "");
+  const content = stripHtml(post.content?.rendered || "");
+  const reviewText = excerpt || content.slice(0, 400);
+
+  return {
+    id: `wp-${postType}-${post.id}`,
+    title: stripHtml(post.title?.rendered || "Untitled"),
+    director: "",
+    year: new Date(post.date || Date.now()).getFullYear(),
+    posterUrl:
+      featuredMedia ||
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=800&auto=format&fit=crop",
+    rating: 4.5,
+    reviewText,
+    tags: terms.length ? terms : ["lunarafilm.com"],
+    status: "logged",
+    dateWatched: (post.date || "").slice(0, 10),
+    articleUrl: post.link,
+  };
+}
+
+async function fetchWordPressJournal() {
+  const bases = [
+    // WordPress.com hosted sites (covers lunarafilm.com's existing plan)
+    `https://public-api.wordpress.com/wp/v2/sites/${WP_SITE}`,
+    // Self-hosted / Jetpack-less fallback
+    `https://${WP_SITE}/wp-json/wp/v2`,
+  ];
+
+  for (const base of bases) {
+    const collections = await Promise.all(
+      WP_POST_TYPES.map(async (type) => {
+        const posts = await fetchWpCollection(base, type);
+        return posts.map((p) => mapWpPostToJournalEntry(p, type));
+      })
+    );
+    const merged = collections.flat();
+    if (merged.length > 0) {
+      // Dedupe by permalink (the same post can be exposed under multiple types)
+      const seen = new Set<string>();
+      const unique = merged.filter((e) => {
+        const key = e.articleUrl || e.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      unique.sort((a, b) => (b.dateWatched || "").localeCompare(a.dateWatched || ""));
+      return unique;
+    }
+  }
+  return [];
+}
+
+app.get("/api/wordpress/journal", async (_req, res) => {
+  try {
+    const entries = await fetchWordPressJournal();
+    res.json({ success: true, site: WP_SITE, count: entries.length, entries });
+  } catch (error: any) {
+    console.error("WordPress sync error:", error);
+    res.status(502).json({ error: error.message || `Failed to fetch posts from ${WP_SITE}.` });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Typefully dispatch — sends generated copy straight into your Typefully
+// drafts. The API is included free with an existing Typefully account:
+// Typefully → Settings → Integrations → API.
+// ---------------------------------------------------------------------------
+
+app.post("/api/typefully/draft", async (req, res) => {
+  const apiKey = process.env.TYPEFULLY_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({
+      error:
+        "TYPEFULLY_API_KEY is not set. Grab a free key from Typefully → Settings → Integrations → API and add it to .env.",
+    });
+  }
+
+  const { content, scheduleToNextSlot, threadify } = req.body || {};
+  if (!content) {
+    return res.status(400).json({ error: "content is required." });
+  }
+
+  const body: Record<string, unknown> = { content, threadify: Boolean(threadify) };
+  if (scheduleToNextSlot) body["schedule-date"] = "next-free-slot";
+
+  const attempt = (authValue: string) =>
+    fetch("https://api.typefully.com/v1/drafts/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": authValue },
+      body: JSON.stringify(body),
+    });
+
+  try {
+    // Typefully's docs show "X-API-KEY: Bearer <key>"; some clients use the bare key.
+    let response = await attempt(`Bearer ${apiKey}`);
+    if (response.status === 401 || response.status === 403) {
+      response = await attempt(apiKey);
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      return res
+        .status(response.status)
+        .json({ error: `Typefully API error (${response.status}): ${text.slice(0, 300)}` });
+    }
+    let draft: any = null;
+    try {
+      draft = JSON.parse(text);
+    } catch {
+      draft = { raw: text };
+    }
+    res.json({ success: true, draft });
+  } catch (error: any) {
+    console.error("Typefully dispatch error:", error);
+    res.status(502).json({ error: error.message || "Failed to reach the Typefully API." });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Start Express + Vite server
+// ---------------------------------------------------------------------------
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -168,8 +548,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`LUNARA FILM Hub server active on http://0.0.0.0:${PORT}`);
+  app.listen(PORT, "0.0.0.0", async () => {
+    const order = await resolveProviderOrder();
+    console.log(`LUNARA FILM Hub server active on http://localhost:${PORT}`);
+    console.log(`[ai] provider order: ${order.join(" → ")}`);
+    console.log(`[wp] journal sync source: ${WP_SITE} (${WP_POST_TYPES.join(", ")})`);
+    console.log(`[typefully] dispatch: ${process.env.TYPEFULLY_API_KEY ? "enabled" : "disabled (no key)"}`);
   });
 }
 

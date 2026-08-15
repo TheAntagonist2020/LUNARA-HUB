@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FilmJournalEntry } from '../types';
-import { Star, Sparkles, Plus, Search, Tag, ExternalLink, Film, Trash2, Edit3, Quote, BookOpen, Sliders, Video, Cpu, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, Sparkles, Plus, Search, Tag, ExternalLink, Film, Trash2, Edit3, Quote, BookOpen, Sliders, Video, Cpu, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 
 interface FilmJournalProps {
   entries: FilmJournalEntry[];
@@ -8,6 +8,7 @@ interface FilmJournalProps {
   onEditJournal: (entry: FilmJournalEntry) => void;
   onDeleteJournal: (id: string) => void;
   onSelectJournalForAI: (entry: FilmJournalEntry) => void;
+  onSyncFromWordPress?: () => Promise<number>;
 }
 
 export const FilmJournal: React.FC<FilmJournalProps> = ({
@@ -16,12 +17,29 @@ export const FilmJournal: React.FC<FilmJournalProps> = ({
   onEditJournal,
   onDeleteJournal,
   onSelectJournalForAI,
+  onSyncFromWordPress,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | 'all'>('all');
   const [selectedSection, setSelectedSection] = useState<string | 'all'>('all');
   const [minRating, setMinRating] = useState<number>(0);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'done' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState<string>('');
+
+  const handleWordPressSync = async () => {
+    if (!onSyncFromWordPress || syncState === 'syncing') return;
+    setSyncState('syncing');
+    setSyncMessage('');
+    try {
+      const added = await onSyncFromWordPress();
+      setSyncState('done');
+      setSyncMessage(added > 0 ? `${added} new from lunarafilm.com` : 'Journal already up to date');
+    } catch (err: any) {
+      setSyncState('error');
+      setSyncMessage(err.message || 'Sync failed');
+    }
+  };
 
   // Extract all unique tags & sections
   const allTags = Array.from(new Set(entries.flatMap((e) => e.tags || [])));
@@ -60,13 +78,33 @@ export const FilmJournal: React.FC<FilmJournalProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewJournal}
-          className="flex items-center gap-2 px-5 py-2.5 border border-[#D4AF37] text-[#D4AF37] uppercase text-[10px] tracking-[0.2em] font-bold hover:bg-[#D4AF37] hover:text-black transition-all rounded shadow-md self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          + New Journal Entry
-        </button>
+        <div className="flex flex-col items-start md:items-end gap-2 self-start md:self-auto">
+          <div className="flex items-center gap-2">
+            {onSyncFromWordPress && (
+              <button
+                onClick={handleWordPressSync}
+                disabled={syncState === 'syncing'}
+                title="Pull published posts from your live WordPress site"
+                className="flex items-center gap-2 px-4 py-2.5 border border-zinc-700 text-zinc-300 uppercase text-[10px] tracking-[0.2em] font-bold hover:border-[#D4AF37] hover:text-[#D4AF37] transition-all rounded shadow-md"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncState === 'syncing' ? 'animate-spin' : ''}`} />
+                {syncState === 'syncing' ? 'Syncing…' : 'Sync lunarafilm.com'}
+              </button>
+            )}
+            <button
+              onClick={onOpenNewJournal}
+              className="flex items-center gap-2 px-5 py-2.5 border border-[#D4AF37] text-[#D4AF37] uppercase text-[10px] tracking-[0.2em] font-bold hover:bg-[#D4AF37] hover:text-black transition-all rounded shadow-md"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              + New Journal Entry
+            </button>
+          </div>
+          {syncMessage && (
+            <span className={`text-[10px] font-mono ${syncState === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {syncMessage}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Filter Bar */}

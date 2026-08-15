@@ -28,13 +28,28 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
   // Loading & Results State
   const [isLoading, setIsLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any | null>(null);
+  const [aiProvider, setAiProvider] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [addedPostsMap, setAddedPostsMap] = useState<Record<string, boolean>>({});
   const [typefullySentMap, setTypefullySentMap] = useState<Record<string, boolean>>({});
+  const [typefullyError, setTypefullyError] = useState<string | null>(null);
 
-  const handlePushToTypefully = (platform: PlatformType, content: string) => {
-    // Dispatch to Typefully drafts API
-    setTypefullySentMap((prev) => ({ ...prev, [platform]: true }));
+  const handlePushToTypefully = async (platform: PlatformType, content: string) => {
+    setTypefullyError(null);
+    try {
+      const res = await fetch('/api/typefully/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, scheduleToNextSlot: false }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Typefully dispatch failed');
+      }
+      setTypefullySentMap((prev) => ({ ...prev, [platform]: true }));
+    } catch (err: any) {
+      setTypefullyError(err.message || 'Typefully dispatch failed');
+    }
   };
 
   // Polisher Tool State
@@ -75,9 +90,10 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
     setIsLoading(true);
     setErrorMsg(null);
     setAiResult(null);
+    setAiProvider(null);
 
     try {
-      const res = await fetch('/api/gemini/generate-social', {
+      const res = await fetch('/api/ai/generate-social', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -97,8 +113,10 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
       }
 
       setAiResult(data.data);
+      setAiProvider(data.provider || null);
     } catch (err: any) {
-      console.error('Gemini social copy error:', err);
+      console.error('AI social copy error:', err);
+      setAiProvider('offline template');
       // Smart Fallback generation if Gemini API key isn't provided yet
       const fallbackResult = {
         twitterCopy: `${filmTitle} (${director || 'Cinema'}) is an absolute triumph. LUNARA FILM breakdown: ${journalNotes.slice(0, 100)}...\n\nRead our full essay: ${articleUrl}`,
@@ -137,7 +155,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
     setPolishResult(null);
 
     try {
-      const res = await fetch('/api/gemini/polish-copy', {
+      const res = await fetch('/api/ai/polish-copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ draftText: polishDraft, platform: polishPlatform }),
@@ -166,7 +184,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="w-5 h-5 text-amber-400 animate-spin" style={{ animationDuration: '6s' }} />
             <span className="text-xs font-mono uppercase tracking-wider text-amber-400">
-              POWERED BY GEMINI AI
+              POWERED BY CLAUDE + GEMINI
             </span>
           </div>
           <h2 className="font-serif text-2xl md:text-3xl font-bold text-zinc-100">
@@ -389,7 +407,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                     Ready to Generate LUNARA Social Campaign
                   </h3>
                   <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
-                    Select a movie from your film journal on the left, choose your tone strategy, and Gemini AI will construct tailored posts for X, Instagram, Letterboxd, and TikTok.
+                    Select a movie from your film journal on the left, choose your tone strategy, and your AI copilot will construct tailored posts for X, Instagram, Letterboxd, and TikTok.
                   </p>
                 </div>
               </div>
@@ -423,7 +441,19 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                       "{aiResult.engagementAdvice}"
                     </p>
                   </div>
+                  {aiProvider && (
+                    <span className="shrink-0 text-[10px] font-mono uppercase tracking-wider text-zinc-400 bg-zinc-950/60 px-2 py-1 rounded border border-zinc-700">
+                      via {aiProvider}
+                    </span>
+                  )}
                 </div>
+
+                {typefullyError && (
+                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{typefullyError}</span>
+                  </div>
+                )}
 
                 {/* Hashtag Suite */}
                 {aiResult.hashtags && (
@@ -577,7 +607,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
               <span>Draft Copy Polisher</span>
             </h3>
             <p className="text-xs text-zinc-400">
-              Paste any rough sentence or film critique snippet and Gemini AI will refashion it into Concise, Editorial, and Provocative hooks.
+              Paste any rough sentence or film critique snippet and your AI copilot will refashion it into Concise, Editorial, and Provocative hooks.
             </p>
           </div>
 
@@ -616,7 +646,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
                 className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg"
               >
                 {isPolishing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                Polish Draft with Gemini
+                Polish Draft with AI
               </button>
             </div>
           </div>

@@ -17,13 +17,13 @@ export const InstanceConnectionsModal: React.FC<InstanceConnectionsModalProps> =
   
   // Endpoint Config States
   const [primaryWpUrl, setPrimaryWpUrl] = useState('https://lunarafilm.com');
-  const [wpUsername, setWpUsername] = useState('dalton');
-  const [wpAppPassword, setWpAppPassword] = useState('aQcG tlXH qjSf Qomh IcvM AvYN');
+  const [wpUsername, setWpUsername] = useState('');
+  const [wpAppPassword, setWpAppPassword] = useState('');
   const [customPostType, setCustomPostType] = useState('review');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // Typefully Integration States
-  const [typefullyApiKey, setTypefullyApiKey] = useState('tf_live_lunara_991823a');
+  const [typefullyApiKey, setTypefullyApiKey] = useState('');
   const [typefullyAutoSchedule, setTypefullyAutoSchedule] = useState(true);
   const [typefullyTestStatus, setTypefullyTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [typefullyTestResult, setTypefullyTestResult] = useState<string>('');
@@ -311,6 +311,7 @@ add_action('rest_api_init', function () {
                     type={showPassword ? 'text' : 'password'}
                     value={wpAppPassword}
                     onChange={(e) => setWpAppPassword(e.target.value)}
+                    placeholder="WP Admin → Users → Profile → Application Passwords"
                     className="w-full bg-[#0a0a0a] border border-zinc-800 rounded px-3 py-1.5 text-zinc-200 focus:outline-none focus:border-[#D4AF37] font-mono"
                   />
                 </div>

@@ -186,10 +186,30 @@ export default function App() {
     setJournalEntries((prev) => prev.filter((j) => j.id !== id));
   };
 
-  // Trigger Gemini AI Copilot from Journal Entry
+  // Trigger AI Copilot from Journal Entry
   const handleSelectJournalForAI = (entry: FilmJournalEntry) => {
     setSelectedJournalForAI(entry);
     setActiveTab('copilot');
+  };
+
+  // Pull published posts from the live WordPress site (free with the existing plan)
+  const handleSyncFromWordPress = async (): Promise<number> => {
+    const res = await fetch('/api/wordpress/journal');
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'WordPress sync failed');
+    }
+    const incoming: FilmJournalEntry[] = data.entries || [];
+    const seen = new Set(journalEntries.map((e) => e.articleUrl || e.id));
+    const fresh = incoming.filter((e) => !seen.has(e.articleUrl || e.id));
+    if (fresh.length > 0) {
+      setJournalEntries((prev) => {
+        const prevSeen = new Set(prev.map((e) => e.articleUrl || e.id));
+        return [...fresh.filter((e) => !prevSeen.has(e.articleUrl || e.id)), ...prev];
+      });
+    }
+    setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    return fresh.length;
   };
 
   return (
@@ -271,6 +291,7 @@ export default function App() {
             }}
             onDeleteJournal={handleDeleteJournal}
             onSelectJournalForAI={handleSelectJournalForAI}
+            onSyncFromWordPress={handleSyncFromWordPress}
           />
         )}
 
