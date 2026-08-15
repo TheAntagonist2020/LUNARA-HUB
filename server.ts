@@ -533,8 +533,13 @@ app.post("/api/typefully/draft", async (req, res) => {
 // Start Express + Vite server
 // ---------------------------------------------------------------------------
 
+// Production when NODE_ENV says so, or via the --prod flag — the flag keeps
+// `npm start` working on Windows, where VAR=value command prefixes don't exist.
+const IS_PRODUCTION =
+  process.env.NODE_ENV === "production" || process.argv.includes("--prod");
+
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (!IS_PRODUCTION) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

@@ -22,7 +22,7 @@ No cloud hosting, no pay-per-token API bills, no new subscriptions.
 bun install        # or: npm install
 
 # 2. Create your local config
-cp .env.example .env
+cp .env.example .env       # Windows cmd: copy .env.example .env
 
 # 3. Run it
 npm run dev        # → http://localhost:3000
@@ -81,7 +81,7 @@ Copilot Studio then push generated copy straight into your Typefully drafts.
 | --- | --- |
 | `npm run dev` | Dev server with Vite HMR at `localhost:3000` |
 | `npm run build` | Production build into `dist/` |
-| `npm start` | Serve the production build (`NODE_ENV=production node dist/server.cjs`) |
+| `npm start` | Serve the production build (works on Windows, macOS, and Linux) |
 | `npm run lint` | Type-check (`tsc --noEmit`) |
 
 ## Health check
