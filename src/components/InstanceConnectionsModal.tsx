@@ -38,97 +38,38 @@ export const InstanceConnectionsModal: React.FC<InstanceConnectionsModalProps> =
 
   if (!isOpen) return null;
 
+  // Real end-to-end test: hub server health + live WordPress journal fetch.
   const handleTestConnection = async () => {
     setTestStatus('testing');
-    setTestOutput(`[PINGING REST API] Initializing handshake with ${primaryWpUrl}...\nTarget CPT: /wp-json/wp/v2/${customPostType}\n`);
+    setTestOutput('[TESTING] Checking hub server integrations and live WordPress sync...\n');
 
     try {
-      // Attempt live REST ping to site's index or custom post type
-      const targetUrl = `${primaryWpUrl.replace(/\/$/, '')}/wp-json/wp/v2/${customPostType}`;
-      const res = await fetch(targetUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setTestStatus('success');
-        setTestOutput(JSON.stringify({
-          status: res.status,
-          message: 'LIVE HANDSHAKE SUCCESSFUL! WordPress REST API responded.',
-          targetEndpoint: targetUrl,
-          authenticatedUser: wpUsername,
-          registeredMetaKeys: [
-            'lunara_section',
-            'lunara_feature_homepage',
-            'lunara_feature_priority',
-            'lunara_signal_context_kicker',
-            'lunara_article_details_kicker',
-            'lunara_journal_cta_label',
-            'lunara_journal_cta_url',
-            'lunara_trailer_url',
-            'lunara_trailer_placement',
-            'lunara_trailer_label',
-            'lunara_source_credit',
-            'lunara_editorial_note',
-            'lunara_provenance_json'
-          ],
-          sampleRemoteRecordCount: Array.isArray(data) ? data.length : 1,
-          liveSyncState: 'READY'
-        }, null, 2));
-      } else {
-        // Fallback simulation if CORS or Auth header required for custom CPT
-        setTimeout(() => {
-          setTestStatus('success');
-          setTestOutput(JSON.stringify({
-            status: 200,
-            message: 'LUNARA Journal Schema Verification & REST API Route Confirmed!',
-            targetEndpoint: targetUrl,
-            authenticatedUser: wpUsername,
-            registeredMetaKeys: [
-              'lunara_section',
-              'lunara_feature_homepage',
-              'lunara_feature_priority',
-              'lunara_signal_context_kicker',
-              'lunara_article_details_kicker',
-              'lunara_journal_cta_label',
-              'lunara_journal_cta_url',
-              'lunara_trailer_url',
-              'lunara_trailer_placement',
-              'lunara_trailer_label',
-              'lunara_source_credit',
-              'lunara_editorial_note',
-              'lunara_provenance_json'
-            ],
-            note: 'Your WP Code Snippet hook `rest_api_init` is active and listening for POST requests.',
-            liveSyncState: 'READY'
-          }, null, 2));
-        }, 800);
-      }
+      const healthRes = await fetch('/api/health');
+      const health = await healthRes.json();
+
+      const wpRes = await fetch('/api/wordpress/journal');
+      const wp = await wpRes.json();
+
+      const allGood = healthRes.ok && wpRes.ok && !wp.error;
+      setTestStatus(allGood ? 'success' : 'error');
+      setTestOutput(
+        JSON.stringify(
+          {
+            hubServer: healthRes.ok ? 'OK' : `HTTP ${healthRes.status}`,
+            aiProviderOrder: health.aiProviderOrder,
+            integrations: health.integrations,
+            wordpressSync: wpRes.ok
+              ? `OK — ${wp.count} published posts readable from ${wp.site}`
+              : `FAILED — ${wp.error || `HTTP ${wpRes.status}`}`,
+            note: 'Credentials live in the hub .env (WP_USERNAME / WP_APP_PASSWORD / TYPEFULLY_API_KEY). wordpressWrite=true means the featured-image pipeline is armed.',
+          },
+          null,
+          2
+        )
+      );
     } catch (err: any) {
-      setTimeout(() => {
-        setTestStatus('success');
-        setTestOutput(JSON.stringify({
-          status: 200,
-          message: 'LUNARA REST API Schema Verification Complete!',
-          targetEndpoint: `${primaryWpUrl}/wp-json/wp/v2/${customPostType}`,
-          authenticatedUser: wpUsername,
-          metaRegistrationStatus: 'Hook rest_api_init verified in theme functions.php',
-          registeredMetaKeys: [
-            'lunara_section',
-            'lunara_feature_homepage',
-            'lunara_feature_priority',
-            'lunara_signal_context_kicker',
-            'lunara_article_details_kicker',
-            'lunara_journal_cta_label',
-            'lunara_journal_cta_url',
-            'lunara_trailer_url',
-            'lunara_trailer_placement',
-            'lunara_trailer_label',
-            'lunara_source_credit',
-            'lunara_editorial_note',
-            'lunara_provenance_json'
-          ],
-          liveSyncState: 'READY'
-        }, null, 2));
-      }, 800);
+      setTestStatus('error');
+      setTestOutput(`Test failed: ${err.message}\nIs the hub server running? (npm run dev)`);
     }
   };
 
@@ -269,7 +210,10 @@ add_action('rest_api_init', function () {
             <div className="p-3 bg-[#050505] border border-zinc-800 rounded flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-[#D4AF37] shrink-0 mt-0.5" />
               <p className="text-zinc-300 leading-relaxed">
-                Connect your live <strong>Lunara Film WordPress Production & Staging sites</strong> using Application Passwords. This enables direct 2-way synchronization of reviews, CPT meta fields, and Gemini AI generated social campaigns.
+                Live credentials are configured server-side in the hub's <strong>.env</strong> file
+                (<code>WP_USERNAME</code>, <code>WP_APP_PASSWORD</code>, <code>TYPEFULLY_API_KEY</code>) — see
+                README and PUBLISHING-PLAYBOOK.md. The fields below are reference only; use the{' '}
+                <strong>Live Sync Test</strong> tab to verify what's actually armed.
               </p>
             </div>
 
@@ -408,20 +352,23 @@ add_action('rest_api_init', function () {
                     className="flex-1 bg-[#0a0a0a] border border-zinc-800 rounded px-3 py-2 text-zinc-200 font-mono focus:outline-none focus:border-sky-400"
                   />
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setTypefullyTestStatus('testing');
-                      setTypefullyTestResult('Verifying Typefully API Key with https://api.typefully.com/v1/drafts/...');
-                      setTimeout(() => {
-                        setTypefullyTestStatus('success');
-                        setTypefullyTestResult(JSON.stringify({
-                          status: 200,
-                          message: 'Typefully API Connection Authenticated Successfully!',
-                          account: '@LunaraFilm',
-                          connectedPlatforms: ['X / Twitter', 'Threads', 'LinkedIn', 'Bluesky'],
-                          activeQueueSlot: 'Next available slot',
-                          typefullyDraftsApiVersion: 'v1'
-                        }, null, 2));
-                      }, 1000);
+                      setTypefullyTestResult('Checking the hub server for a configured Typefully key...');
+                      try {
+                        const res = await fetch('/api/health');
+                        const health = await res.json();
+                        const armed = Boolean(health?.integrations?.typefullyKey);
+                        setTypefullyTestStatus(armed ? 'success' : 'error');
+                        setTypefullyTestResult(
+                          armed
+                            ? 'TYPEFULLY_API_KEY is configured in .env — dispatch buttons in Copilot Studio and the Planner are live. The key itself is verified on your first real dispatch.'
+                            : 'No TYPEFULLY_API_KEY in the hub .env. Add it (Typefully → Settings → Integrations → API), restart the hub, and test again.'
+                        );
+                      } catch (err: any) {
+                        setTypefullyTestStatus('error');
+                        setTypefullyTestResult(`Could not reach the hub server: ${err.message}`);
+                      }
                     }}
                     className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-black font-mono uppercase text-[10px] font-bold rounded tracking-wider transition-all"
                   >
@@ -501,21 +448,13 @@ add_action('rest_api_init', function () {
         {activeTab === 'webhooks' && (
           <div className="space-y-4 animate-fadeIn text-xs">
             <div className="p-4 bg-[#050505] border border-zinc-800 rounded space-y-3">
-              <h4 className="font-mono text-xs text-[#D4AF37] uppercase tracking-wider">Active Real-Time Event Webhooks</h4>
-              <div className="space-y-2 font-mono text-[11px]">
-                <div className="flex justify-between items-center p-2.5 bg-[#0a0a0a] border border-zinc-800 rounded">
-                  <span className="text-zinc-300">journal_entry.created</span>
-                  <span className="text-emerald-400">HTTP 200 OK • Live</span>
-                </div>
-                <div className="flex justify-between items-center p-2.5 bg-[#0a0a0a] border border-zinc-800 rounded">
-                  <span className="text-zinc-300">social_campaign.dispatched</span>
-                  <span className="text-emerald-400">HTTP 200 OK • Live</span>
-                </div>
-                <div className="flex justify-between items-center p-2.5 bg-[#0a0a0a] border border-zinc-800 rounded">
-                  <span className="text-zinc-300">trailer_metadata.updated</span>
-                  <span className="text-emerald-400">HTTP 200 OK • Live</span>
-                </div>
-              </div>
+              <h4 className="font-mono text-xs text-[#D4AF37] uppercase tracking-wider">Event Webhooks</h4>
+              <p className="text-zinc-400 text-[11px] leading-relaxed">
+                No webhooks are configured — the hub currently syncs by pulling from
+                lunarafilm.com's public REST API (automatically on startup, or via the
+                Journal tab's sync button). Real-time push webhooks are a possible future
+                addition, not an active feature.
+              </p>
             </div>
           </div>
         )}

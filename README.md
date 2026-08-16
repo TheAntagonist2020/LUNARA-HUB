@@ -98,6 +98,12 @@ Copilot Studio then push generated copy straight into your Typefully drafts.
 | `npm start` | Serve the production build (works on Windows, macOS, and Linux) |
 | `npm run lint` | Type-check (`tsc --noEmit`) |
 
+## Publishing rules
+
+The standing media workflow — featured-image-as-hero, trailers in the site's
+dedicated fields, official assets only, vault backups, and lunarafilm.com's
+exact field reference — lives in **[PUBLISHING-PLAYBOOK.md](PUBLISHING-PLAYBOOK.md)**.
+
 ## Health check
 
 `GET http://localhost:3000/api/health` reports which AI providers are active
