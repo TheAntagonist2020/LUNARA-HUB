@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs --prod",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
+    "doctor": "node scripts/doctor.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
