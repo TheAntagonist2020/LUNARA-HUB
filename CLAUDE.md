@@ -30,6 +30,10 @@ modal all read. Keep any new integration reporting there.
 - `POST /api/ai/generate-social`, `/api/ai/polish-copy` (legacy `/api/gemini/*`
   aliases kept) — provider chain, returns `provider` used
 - `GET /api/wordpress/journal` — public REST pull of published posts
+- `GET /api/wordpress/drafts` — authenticated list of drafts awaiting review
+  (Lunara Dispatch + Claude output; feeds the dashboard's Awaiting Review
+  panel). Site news intake is the Dispatch plugin alone — see the playbook's
+  Automation architecture section
 - `POST /api/wordpress/featured-image` — image URL → media-vault backup →
   WP media library → featured image (supports `postType` for CPTs)
 - `POST /api/typefully/draft` — content → Typefully drafts (or next queue slot)

@@ -523,6 +523,56 @@ app.get("/api/wordpress/journal", async (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Drafts awaiting review — lists draft posts across the site's post types so
+// the dashboard shows what Lunara Dispatch (and Claude) have produced.
+// Needs the same WP_USERNAME + WP_APP_PASSWORD as the media pipeline, since
+// drafts are only visible to authenticated requests.
+// ---------------------------------------------------------------------------
+
+app.get("/api/wordpress/drafts", async (_req, res) => {
+  const user = process.env.WP_USERNAME;
+  const appPassword = process.env.WP_APP_PASSWORD;
+  if (!user || !appPassword) {
+    return res.status(503).json({
+      error:
+        "WP_USERNAME / WP_APP_PASSWORD not set — drafts are private, so listing them needs the Application Password in .env.",
+    });
+  }
+
+  const auth = "Basic " + Buffer.from(`${user}:${appPassword}`).toString("base64");
+  const apiBase = `https://${WP_SITE}/wp-json/wp/v2`;
+
+  try {
+    const collections = await Promise.all(
+      WP_POST_TYPES.map(async (type) => {
+        try {
+          const url = `${apiBase}/${type}?status=draft&per_page=20&context=edit&_fields=id,title,modified,link`;
+          const r = await fetch(url, { headers: { Authorization: auth, Accept: "application/json" } });
+          if (!r.ok) return [];
+          const posts = await r.json();
+          if (!Array.isArray(posts)) return [];
+          return posts.map((p: any) => ({
+            id: p.id,
+            title: stripHtml(p.title?.rendered || p.title?.raw || "Untitled draft"),
+            postType: type,
+            modified: p.modified || "",
+            editUrl: `https://${WP_SITE}/wp-admin/post.php?post=${p.id}&action=edit&classic-editor`,
+            previewUrl: `https://${WP_SITE}/?post_type=${type}&p=${p.id}&preview=true`,
+          }));
+        } catch {
+          return [];
+        }
+      })
+    );
+    const drafts = collections.flat().sort((a, b) => (b.modified || "").localeCompare(a.modified || ""));
+    res.json({ success: true, count: drafts.length, drafts });
+  } catch (error: any) {
+    console.error("Drafts listing error:", error);
+    res.status(502).json({ error: error.message || `Failed to list drafts from ${WP_SITE}.` });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Media pipeline — pull official key art / trailer stills from a URL, keep a
 // local backup copy in the media vault, upload to the WordPress media
 // library, and set it as a post's featured image. Uploading needs

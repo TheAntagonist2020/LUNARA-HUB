@@ -46,10 +46,36 @@ Reviews: TMDB posters are auto-sideloaded as featured images by the
 "Lunara Database Engine" plugin on the site — set the IMDb id and the site
 handles review artwork itself.
 
+## Automation architecture (decided 2026-08 — keep it this simple)
+
+**Lunara Dispatch is the sole automated news intake.** Dalton's own plugin
+polls its configured feeds, writes drafts in the journal voice, and attaches
+featured images itself. New sources are added in the plugin's wp-admin
+settings — nothing else.
+
+Flow: **Dispatch → draft + featured image → "Needs Attention" IFTTT phone
+ping → review (hub's Awaiting Review panel or wp-admin) → publish.**
+
+Explicit decision: **no Feedly → IFTTT → capture inbound layer.** It was
+designed, then rejected as over-complication before being built. Do not
+resurrect it. IFTTT keeps exactly two Lunara jobs: the "Lunara — Needs
+Attention" outbound ping and the Trakt watched-movie review reminder.
+
+Roles: Dispatch = automated news drafts · Claude = breaking news, reviews,
+and media on demand (this playbook) · Hub = the cockpit (real state, social
+copy, Typefully, featured images).
+
+Standing security notes: the Foundation bridge's `ifttt_operator` token was
+scheduled for rotation (unknown daily ~7:30 AM caller); the `chatgpt_editor`
+bridge profile (publish scope) is legacy and can be retired at Dalton's
+discretion.
+
 ## Hub endpoints in this pipeline
 
 - `POST /api/wordpress/featured-image` — URL → vault backup → media library
   → featured image. Needs `WP_USERNAME` + `WP_APP_PASSWORD` in `.env`.
 - `GET /api/wordpress/journal` — pulls published posts into the Journal tab.
+- `GET /api/wordpress/drafts` — drafts awaiting review (Dispatch + Claude
+  output), shown on the dashboard. Needs the same WP credentials.
 - `POST /api/typefully/draft` — copy → Typefully drafts/queue.
 - `GET /api/health` — reports which of the above are armed.

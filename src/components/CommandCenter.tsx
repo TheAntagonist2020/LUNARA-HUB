@@ -38,11 +38,25 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   // Live integration status from the local server — the same source of truth
   // as the terminal startup log, so the app and terminal always agree.
   const [health, setHealth] = React.useState<any | null>(null);
+  const [drafts, setDrafts] = React.useState<any[] | null>(null);
+  const [draftsError, setDraftsError] = React.useState<string | null>(null);
   React.useEffect(() => {
     fetch('/api/health')
       .then((res) => res.json())
       .then(setHealth)
       .catch(() => setHealth(null));
+    fetch('/api/wordpress/drafts')
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          setDraftsError(data.error || `Drafts unavailable (HTTP ${res.status})`);
+          setDrafts(null);
+        } else {
+          setDrafts(data.drafts || []);
+          setDraftsError(null);
+        }
+      })
+      .catch((err) => setDraftsError(err.message || 'Drafts unavailable'));
   }, []);
 
   const aiEngineLabels: Record<string, string> = {
@@ -126,6 +140,70 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             {typefullyOn ? 'Dispatches land in your drafts queue' : 'Add TYPEFULLY_API_KEY to .env'}
           </p>
         </div>
+      </div>
+
+      {/* Awaiting Review — drafts produced by Lunara Dispatch and Claude */}
+      <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+          <div>
+            <h2 className="text-xl font-serif italic text-zinc-100">Awaiting Review</h2>
+            <p className="text-[11px] text-zinc-500 uppercase tracking-widest mt-0.5">
+              Site drafts from Dispatch automation & Claude — review, then publish
+            </p>
+          </div>
+          {drafts !== null && (
+            <span className="text-xs font-mono text-[#D4AF37] bg-[#D4AF37]/10 border border-[#D4AF37]/30 px-2.5 py-0.5 rounded">
+              {drafts.length} draft{drafts.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+
+        {draftsError && (
+          <p className="text-xs text-zinc-400 font-mono leading-relaxed">{draftsError}</p>
+        )}
+        {drafts !== null && drafts.length === 0 && (
+          <p className="text-xs text-zinc-400">Nothing awaiting review — the desk is clear.</p>
+        )}
+        {drafts !== null && drafts.length > 0 && (
+          <div className="space-y-2">
+            {drafts.slice(0, 8).map((d) => (
+              <div
+                key={`${d.postType}-${d.id}`}
+                className="p-3 bg-[#050505] border border-zinc-800/90 rounded-lg flex items-center justify-between gap-3 hover:border-[#D4AF37]/50 transition-all"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[9px] px-2 py-0.5 bg-zinc-900 text-[#D4AF37] uppercase font-bold tracking-tighter border border-[#D4AF37]/20 shrink-0">
+                      {d.postType}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">
+                      {d.modified ? new Date(d.modified).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-serif text-zinc-200 line-clamp-1">{d.title}</h3>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 text-[10px] font-mono uppercase tracking-wider">
+                  <a
+                    href={d.previewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1 rounded border border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700"
+                  >
+                    Preview
+                  </a>
+                  <a
+                    href={d.editUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1 rounded border border-[#D4AF37]/50 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-black transition-all"
+                  >
+                    Edit
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Main Grid: Editorial Queue vs Signal Flow */}
