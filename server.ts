@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { spawn } from "child_process";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -775,6 +776,13 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", async () => {
     const order = await resolveProviderOrder();
     console.log(`LUNARA FILM Hub server active on http://localhost:${PORT}`);
+    const lanAddresses = Object.values(os.networkInterfaces())
+      .flatMap((iface) => iface ?? [])
+      .filter((addr) => addr.family === "IPv4" && !addr.internal)
+      .map((addr) => addr.address);
+    for (const address of lanAddresses) {
+      console.log(`[phone] same Wi-Fi: http://${address}:${PORT} (allow Node through the firewall if prompted)`);
+    }
     console.log(`[ai] provider order: ${order.join(" → ")}`);
     console.log(`[wp] journal sync source: ${WP_SITE} (${WP_POST_TYPES.join(", ")})`);
     console.log(`[typefully] dispatch: ${process.env.TYPEFULLY_API_KEY ? "enabled" : "disabled (no key)"}`);

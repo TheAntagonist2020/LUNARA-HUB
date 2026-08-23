@@ -51,11 +51,11 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Live Stream Simulator Toggle (Mobile) */}
-          <div className="md:hidden flex items-center">
+          {/* Compact Action Controls (Mobile) */}
+          <div className="md:hidden flex items-center gap-1.5">
             <button
               onClick={() => setIsSimulating(!isSimulating)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-mono border transition-all ${
                 isSimulating
                   ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
                   : 'bg-zinc-800/60 border-zinc-700 text-zinc-400'
@@ -63,6 +63,27 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Radio className={`w-3 h-3 ${isSimulating ? 'animate-ping text-emerald-400' : ''}`} />
               {isSimulating ? 'LIVE' : 'PAUSED'}
+            </button>
+            <button
+              onClick={onOpenConnectionsModal}
+              title="Connections & WP sync"
+              className="p-2 rounded-lg bg-[#0a0a0a] border border-zinc-800 text-zinc-300 active:bg-zinc-900 transition-all"
+            >
+              <Globe className="w-4 h-4 text-[#D4AF37]" />
+            </button>
+            <button
+              onClick={onOpenNewJournal}
+              title="New film log"
+              className="p-2 rounded-lg bg-[#0a0a0a] border border-zinc-800 text-zinc-300 active:bg-zinc-900 transition-all"
+            >
+              <BookOpen className="w-4 h-4 text-[#D4AF37]" />
+            </button>
+            <button
+              onClick={onOpenNewPost}
+              title="Create entry"
+              className="p-2 rounded-lg border border-[#D4AF37] text-[#D4AF37] active:bg-[#D4AF37] active:text-black transition-all"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
         </div>

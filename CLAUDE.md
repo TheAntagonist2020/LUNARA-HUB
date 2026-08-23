@@ -5,6 +5,11 @@ React 19 + Vite frontend, Express backend in `server.ts` (single file), run with
 `npm run dev` at http://localhost:3000. Type-check with `npm run lint`
 (tsc --noEmit); production: `npm run build` then `npm start`.
 
+Installable as a PWA (manifest + icons in `public/`, pass-through `sw.js` that
+must never cache — live state only). Server binds 0.0.0.0 and prints its LAN
+URL for phone access; remote access is Tailscale (free tier), never a public
+tunnel — see README "On your phone".
+
 ## Design intent: $0 marginal cost
 
 Everything runs on services Dalton already pays for. Never add a paid API when

@@ -89,6 +89,42 @@ Get an API key from **Typefully → Settings → Integrations → API** and set
 `TYPEFULLY_API_KEY` in `.env`. The **⚡ Send to Typefully** buttons in the AI
 Copilot Studio then push generated copy straight into your Typefully drafts.
 
+## On your phone
+
+The hub is an installable web app (PWA) — it gets a LUNARA home-screen icon
+and runs full-screen like a native app. Three tiers, all $0:
+
+### Same Wi-Fi (zero setup)
+
+1. Start the hub on your PC (`npm run dev` or `npm start`). The console now
+   prints a line like `[phone] same Wi-Fi: http://192.168.1.23:3000` — if
+   Windows asks about the firewall the first time, click **Allow**.
+2. Open that address in your phone's browser.
+3. Install it: **iPhone** — Share → *Add to Home Screen*. **Android** —
+   menu (⋮) → *Add to Home screen* / *Install app*.
+
+### Anywhere (Tailscale, free tier)
+
+Same Wi-Fi only works at home. [Tailscale](https://tailscale.com) (free for
+personal use) gives your PC a private address that works from anywhere, with
+nothing exposed to the public internet:
+
+1. Install Tailscale on the PC and the phone, sign both into the same account.
+2. On the phone, open `http://<your-pc-name>:3000` (the name shown in the
+   Tailscale app). Add to home screen the same way.
+
+The PC has to be on and running the hub — the tradeoff for $0 hosting.
+
+### Anywhere, PC off (no hub needed)
+
+Publishing doesn't require the hub at all — the site is the always-on part:
+
+- **Claude app / claude.ai** on the phone: a Claude Code session on this repo
+  can list drafts, write dispatches, and publish to lunarafilm.com directly
+  (the site's MCP bridge works from anywhere).
+- **wp-admin** in the phone browser: review and publish Dispatch drafts.
+- **Typefully app**: the social queue.
+
 ## Scripts
 
 | Command | What it does |
