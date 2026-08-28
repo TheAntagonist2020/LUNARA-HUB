@@ -14,6 +14,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+      /* Cinematic backdrop: projector glow from above, vignette below —
+         fixed so it doesn't repaint on scroll. */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+          radial-gradient(ellipse 90% 55% at 50% -15%, rgba(212, 175, 55, 0.12), transparent 60%),
+          radial-gradient(ellipse 70% 45% at 90% 115%, rgba(82, 82, 91, 0.28), transparent 65%),
+          radial-gradient(ellipse 55% 40% at 0% 100%, rgba(30, 41, 59, 0.35), transparent 60%),
+          #050505;
+      }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 5px; }
+      ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+    </style>
   </head>
   <body class="bg-[#050505] text-[#e5e5e5] antialiased">
     <div id="root"></div>

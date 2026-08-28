@@ -1,7 +1,24 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { FilmJournalEntry, SocialPost, PlatformMetric, LiveActivity } from '../types';
 import { PlatformIcon, getPlatformBg } from './PlatformIcon';
-import { Eye, TrendingUp, MousePointerClick, Calendar, Radio, ArrowUpRight, Sparkles, CheckCircle2, Clock, Send, Star, ExternalLink, RefreshCw } from 'lucide-react';
+import { Eye, TrendingUp, MousePointerClick, Calendar, Radio, ArrowUpRight, Sparkles, CheckCircle2, Clock, Send, Star, ExternalLink, RefreshCw, BookOpen, Cpu, Zap, Inbox } from 'lucide-react';
+
+// Shared cinematic panel treatment: soft vertical gradient, gold hairline
+// along the top edge, gentle glow on hover.
+const panelClass =
+  'relative overflow-hidden bg-gradient-to-b from-zinc-900/50 to-[#0a0a0a] border border-zinc-800/80 rounded-xl transition-all duration-300 hover:border-[#D4AF37]/30 hover:shadow-[0_0_40px_rgba(212,175,55,0.05)]';
+
+const Hairline: React.FC = () => (
+  <div aria-hidden className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#D4AF37]/50 to-transparent" />
+);
+
+// Staggered entrance for top-level sections.
+const rise = (delay: number) => ({
+  initial: { opacity: 0, y: 18 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.55, delay, ease: 'easeOut' as const },
+});
 
 interface CommandCenterProps {
   posts: SocialPost[];
@@ -71,15 +88,17 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
     <div className="space-y-8 animate-fadeIn">
       
       {/* Hero Welcome & Control Strip */}
-      <div className="bg-[#0a0a0a] rounded-xl p-8 border border-zinc-800 shadow-2xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
+      <motion.div {...rise(0)} className="bg-gradient-to-br from-zinc-900/70 via-[#0a0a0a] to-[#0a0a0a] rounded-xl p-8 border border-zinc-800 shadow-2xl relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <Hairline />
+        <div aria-hidden className="absolute -top-32 -right-24 w-96 h-96 rounded-full bg-[#D4AF37]/[0.07] blur-3xl pointer-events-none" />
+        <div className="space-y-2 relative">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
             <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D4AF37]">
               LUNARA FILM ARCHIVE • EDITORIAL QUEUE
             </span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-serif italic text-zinc-100">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-serif italic bg-gradient-to-r from-[#e8d5a0] via-[#D4AF37] to-[#a8862e] bg-clip-text text-transparent pb-1">
             Journal Control & Media Hub
           </h1>
           <p className="text-zinc-400 text-xs max-w-xl leading-relaxed">
@@ -107,43 +126,60 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
             Create Entry
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Real Status Strip — journal size, queue, and live integration state */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Journal Entries</p>
-          <p className="text-4xl font-serif text-[#D4AF37]">{journalEntries.length}</p>
+        <motion.div {...rise(0.08)} className={`${panelClass} group p-6 space-y-1 hover:-translate-y-0.5`}>
+          <Hairline />
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Journal Entries</p>
+            <BookOpen className="w-4 h-4 text-[#D4AF37]/50 group-hover:text-[#D4AF37] transition-colors" />
+          </div>
+          <p className="text-4xl font-serif bg-gradient-to-b from-[#e8d5a0] to-[#D4AF37] bg-clip-text text-transparent">{journalEntries.length}</p>
           <p className="text-[10px] text-zinc-400 font-mono pt-1">Synced from lunarafilm.com + local logs</p>
-        </div>
+        </motion.div>
 
-        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Active Queue</p>
+        <motion.div {...rise(0.14)} className={`${panelClass} group p-6 space-y-1 hover:-translate-y-0.5`}>
+          <Hairline />
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Active Queue</p>
+            <Calendar className="w-4 h-4 text-[#D4AF37]/50 group-hover:text-[#D4AF37] transition-colors" />
+          </div>
           <p className="text-4xl font-serif text-white">{queuedPosts.length}</p>
           <button onClick={onGoToPlanner} className="text-[10px] text-zinc-400 hover:text-[#D4AF37] font-mono pt-1 flex items-center gap-1">
             View Planner → {publishedPosts.length > 0 ? `(${publishedPosts.length} published)` : ''}
           </button>
-        </div>
+        </motion.div>
 
-        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">AI Engine</p>
+        <motion.div {...rise(0.2)} className={`${panelClass} group p-6 space-y-1 hover:-translate-y-0.5`}>
+          <Hairline />
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">AI Engine</p>
+            <Cpu className="w-4 h-4 text-[#D4AF37]/50 group-hover:text-[#D4AF37] transition-colors" />
+          </div>
           <p className="text-2xl font-serif text-white pt-2">{aiEngine}</p>
           <p className="text-[10px] text-emerald-400 font-mono pt-1">$0 extra — uses what you already pay for</p>
-        </div>
+        </motion.div>
 
-        <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-1 hover:border-[#D4AF37]/50 transition-all">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Typefully</p>
+        <motion.div {...rise(0.26)} className={`${panelClass} group p-6 space-y-1 hover:-translate-y-0.5`}>
+          <Hairline />
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Typefully</p>
+            <Zap className="w-4 h-4 text-[#D4AF37]/50 group-hover:text-[#D4AF37] transition-colors" />
+          </div>
           <p className={`text-2xl font-serif pt-2 ${typefullyOn ? 'text-emerald-400' : 'text-zinc-500'}`}>
             {health === null ? '…' : typefullyOn ? 'Connected' : 'Not connected'}
           </p>
           <p className="text-[10px] text-zinc-400 font-mono pt-1">
             {typefullyOn ? 'Dispatches land in your drafts queue' : 'Add TYPEFULLY_API_KEY to .env'}
           </p>
-        </div>
+        </motion.div>
       </div>
 
       {/* Awaiting Review — drafts produced by Lunara Dispatch and Claude */}
-      <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-4">
+      <motion.div {...rise(0.32)} className={`${panelClass} p-6 space-y-4`}>
+        <Hairline />
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
           <div>
             <h2 className="text-xl font-serif italic text-zinc-100">Awaiting Review</h2>
@@ -162,14 +198,22 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           <p className="text-xs text-zinc-400 font-mono leading-relaxed">{draftsError}</p>
         )}
         {drafts !== null && drafts.length === 0 && (
-          <p className="text-xs text-zinc-400">Nothing awaiting review — the desk is clear.</p>
+          <div className="py-8 text-center space-y-2">
+            <div className="w-10 h-10 mx-auto rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/5 flex items-center justify-center">
+              <Inbox className="w-4 h-4 text-[#D4AF37]/70" />
+            </div>
+            <p className="text-xs text-zinc-400">Nothing awaiting review — the desk is clear.</p>
+          </div>
         )}
         {drafts !== null && drafts.length > 0 && (
           <div className="space-y-2">
-            {drafts.slice(0, 8).map((d) => (
-              <div
+            {drafts.slice(0, 8).map((d, i) => (
+              <motion.div
                 key={`${d.postType}-${d.id}`}
-                className="p-3 bg-[#050505] border border-zinc-800/90 rounded-lg flex items-center justify-between gap-3 hover:border-[#D4AF37]/50 transition-all"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.35, delay: 0.4 + i * 0.05, ease: 'easeOut' }}
+                className="p-3 bg-[#050505]/80 border border-zinc-800/90 rounded-lg flex items-center justify-between gap-3 hover:border-[#D4AF37]/50 hover:bg-zinc-900/40 transition-all"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
@@ -200,17 +244,18 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                     Edit
                   </a>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Main Grid: Editorial Queue vs Signal Flow */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
+
         {/* Editorial Queue List (7 Cols) */}
-        <div className="lg:col-span-7 bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-4">
+        <motion.div {...rise(0.4)} className={`${panelClass} lg:col-span-7 p-6 space-y-4`}>
+          <Hairline />
           <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
             <div>
               <h2 className="text-xl font-serif italic text-zinc-100">
@@ -286,10 +331,11 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Signal Flow Stream (5 Cols) */}
-        <div className="lg:col-span-5 bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl flex flex-col justify-between">
+        <motion.div {...rise(0.48)} className={`${panelClass} lg:col-span-5 p-6 flex flex-col justify-between`}>
+          <Hairline />
           <div>
             <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-4">
               <h2 className="text-xs uppercase tracking-[0.3em] text-zinc-400 font-semibold flex items-center gap-2">
@@ -329,12 +375,13 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           <div className="mt-6 pt-4 border-t border-zinc-800 text-[10px] text-zinc-500 font-mono text-center">
             <span>{isSimulating ? 'Simulated engagement for layout preview — not real data' : 'Feed idle'}</span>
           </div>
-        </div>
+        </motion.div>
 
       </div>
 
       {/* Film Journal Spotlight Deck */}
-      <div className="bg-[#0a0a0a] border border-zinc-800 p-6 rounded-xl space-y-4">
+      <motion.div {...rise(0.56)} className={`${panelClass} p-6 space-y-4`}>
+        <Hairline />
         <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
           <div>
             <h2 className="text-xl font-serif italic text-zinc-100 flex items-center gap-2">
@@ -353,10 +400,13 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {journalEntries.slice(0, 4).map((entry) => (
-            <div
+          {journalEntries.slice(0, 4).map((entry, i) => (
+            <motion.div
               key={entry.id}
-              className="bg-[#050505] rounded-xl overflow-hidden border border-zinc-800 hover:border-[#D4AF37] transition-all flex flex-col justify-between group"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.62 + i * 0.07, ease: 'easeOut' }}
+              className="bg-[#050505] rounded-xl overflow-hidden border border-zinc-800 hover:border-[#D4AF37]/70 hover:shadow-[0_8px_32px_rgba(212,175,55,0.08)] hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
             >
               <div className="relative h-48 overflow-hidden">
                 <img
@@ -390,10 +440,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
                   <Sparkles className="w-3.5 h-3.5" /> Generate Social Posts
                 </button>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
-      </div>
+      </motion.div>
 
     </div>
   );
