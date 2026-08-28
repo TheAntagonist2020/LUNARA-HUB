@@ -17,6 +17,8 @@ AI session or human touching the pipeline follows it.
    verify the YouTube channel is official (e.g. via `youtube.com/oembed`).
 4. **Every uploaded image also gets a local backup** in `media-vault/YYYY-MM/`
    (the hub's `/api/wordpress/featured-image` endpoint does this automatically).
+   The vault is rebuildable from the site on any machine —
+   `npm run vault:backfill` (the WP media library is the master archive).
 5. **Image spec** (site validator, config 1.0.25): hard minimum 800×450,
    preferred 1200×630+, landscape ratio 1.5–2.1. Always set alt text.
 

@@ -83,6 +83,19 @@ Steps 3–4 need a one-time setup: create an Application Password in
 `WP_USERNAME` + `WP_APP_PASSWORD` in `.env`. The `media-vault/` folder is
 gitignored — it's your local archive of every asset that ships to the site.
 
+**The vault is rebuildable — you can never truly lose it.** The site's media
+library is the master archive; on any fresh machine:
+
+```bash
+npm run vault:backfill                    # media from the last 12 months
+npm run vault:backfill -- --since 2026-08 # from a given month onward
+npm run vault:backfill -- --all           # the entire library (thousands of files)
+```
+
+It's idempotent (already-downloaded files are skipped) and honors
+`MEDIA_VAULT_DIR` — point that at a cloud-synced folder (OneDrive /
+Proton Drive) in `.env` and the vault backs itself up off-device too.
+
 ## Typefully dispatch (your existing Typefully account)
 
 Get an API key from **Typefully → Settings → Integrations → API** and set

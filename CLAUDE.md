@@ -24,7 +24,10 @@ via `AI_PROVIDER`; auto-detects otherwise.
 - `WP_USERNAME` + `WP_APP_PASSWORD` — Application Password; arms the media
   pipeline (wp-admin → Users → Profile → Application Passwords)
 - `TYPEFULLY_API_KEY` — Typefully → Settings → Integrations → API
-- `MEDIA_VAULT_DIR` (default ./media-vault, gitignored), `PORT`
+- `MEDIA_VAULT_DIR` (default ./media-vault, gitignored), `PORT`. The vault is
+  rebuildable from the site's media library: `npm run vault:backfill`
+  (scripts/vault-backfill.mjs) — idempotent, `--since YYYY-MM` / `--all` /
+  `--limit N`
 
 `GET /api/health` reports which integrations are armed — it is the single
 source of truth the dashboard tiles, Copilot Studio banner, and connections
