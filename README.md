@@ -21,12 +21,16 @@ No cloud hosting, no pay-per-token API bills, no new subscriptions.
 # 1. Install dependencies (bun is fastest; npm works too)
 bun install        # or: npm install
 
-# 2. Create your local config
-cp .env.example .env       # Windows cmd: copy .env.example .env
+# 2. Create your local config — answer the prompts, it writes .env for you
+npm run setup
 
 # 3. Run it
 npm run dev        # → http://localhost:3000
 ```
+
+(`npm run setup` is the recommended way to create `.env` — it can't produce
+commented-out keys or formatting mistakes. Hand-copying `.env.example` still
+works if you prefer.)
 
 That's it — the app is fully functional with **zero keys configured**: AI
 features fall back to deterministic offline templates. Add the integrations
