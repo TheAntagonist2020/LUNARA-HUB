@@ -36,7 +36,11 @@ let claudeCliCheckedAt = 0;
 
 function spawnClaudeCli(args: string[], stdin: string | null, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(CLAUDE_CLI, args, { shell: NEEDS_SHELL, windowsHide: true });
+    // Node deprecates args arrays combined with shell:true (DEP0190), so on
+    // Windows the fixed args are joined into the command string ourselves.
+    const child = NEEDS_SHELL
+      ? spawn(`"${CLAUDE_CLI}" ${args.join(" ")}`, { shell: true, windowsHide: true })
+      : spawn(CLAUDE_CLI, args, { windowsHide: true });
     let stdout = "";
     let stderr = "";
     let settled = false;
