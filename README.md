@@ -149,7 +149,16 @@ Publishing doesn't require the hub at all — the site is the always-on part:
 | `npm run dev` | Dev server with Vite HMR at `localhost:3000` |
 | `npm run build` | Production build into `dist/` |
 | `npm start` | Serve the production build (works on Windows, macOS, and Linux) |
+| `npm run update` | **One-command update**: pull → install if needed → build → restart the running hub |
+| `npm run setup` | Interactive `.env` wizard — writes a guaranteed-correct config |
+| `npm run doctor` | Connection self-check with remedies |
+| `npm run vault:backfill` | Rebuild the media vault from the site's library |
 | `npm run lint` | Type-check (`tsc --noEmit`) |
+
+Starting the hub while it's already running is safe — it tells you where the
+running copy is instead of crashing. `npm run update` hands off from the old
+build to the new one automatically (a loopback-only restart hook; nothing on
+the network can trigger it).
 
 ## Publishing rules
 

@@ -779,7 +779,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", async () => {
+  const server = app.listen(PORT, "0.0.0.0", async () => {
     const order = await resolveProviderOrder();
     console.log(`LUNARA FILM Hub server active on http://localhost:${PORT}`);
     const lanAddresses = Object.values(os.networkInterfaces())
@@ -793,6 +793,48 @@ async function startServer() {
     console.log(`[wp] journal sync source: ${WP_SITE} (${WP_POST_TYPES.join(", ")})`);
     console.log(`[typefully] dispatch: ${process.env.TYPEFULLY_API_KEY ? "enabled" : "disabled (no key)"}`);
   });
+
+  // A busy port almost always means the hub is already running (auto-start,
+  // or an earlier window). Say so plainly instead of dumping a stack trace.
+  server.on("error", async (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EADDRINUSE") throw err;
+    let alreadyHub = false;
+    try {
+      const res = await fetch(`http://localhost:${PORT}/api/health`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      alreadyHub = Boolean(data?.aiProviderOrder);
+    } catch {
+      // nothing hub-like answered — some other app owns the port
+    }
+    if (alreadyHub) {
+      console.log(`LUNARA Hub is already running — open http://localhost:${PORT}`);
+      console.log(
+        `(To launch a NEW build, stop the old copy first: close the "LUNARA Hub" window, or run: npm run update)`
+      );
+      process.exit(0);
+    } else {
+      console.error(
+        `Port ${PORT} is taken by another app. Set a different PORT in .env (e.g. PORT=3001) and try again.`
+      );
+      process.exit(1);
+    }
+  });
 }
+
+// Loopback-only restart hook so `npm run update` can hand off to a new build
+// without anyone hunting processes. Refuses non-local callers.
+app.post("/api/_local/shutdown", (req, res) => {
+  const ip = req.socket.remoteAddress || "";
+  const isLoopback = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  if (!isLoopback) {
+    res.status(403).json({ error: "Local requests only." });
+    return;
+  }
+  res.json({ ok: true, message: "Shutting down for update." });
+  console.log("[update] shutdown requested by local updater — exiting.");
+  setTimeout(() => process.exit(0), 300);
+});
 
 startServer();
