@@ -23,7 +23,7 @@ lines.push("");
 
 const hasEnv = Object.keys(env).length > 0;
 lines.push(`${flag(hasEnv)} .env file ${hasEnv ? "found" : "NOT FOUND — run: cp .env.example .env"}`);
-for (const key of ["WP_USERNAME", "WP_APP_PASSWORD", "TYPEFULLY_API_KEY", "GEMINI_API_KEY"]) {
+for (const key of ["WP_USERNAME", "WP_APP_PASSWORD", "LUNARA_EDITOR_KEY", "TYPEFULLY_API_KEY", "GEMINI_API_KEY"]) {
   lines.push(`       ${key.padEnd(18)} ${env[key] ? "set" : "not set"}`);
 }
 lines.push("");
@@ -45,6 +45,13 @@ try {
       i.wordpressWrite
         ? "ARMED — featured-image pipeline live"
         : "off — add WP_USERNAME + WP_APP_PASSWORD to .env and restart"
+    }`
+  );
+  lines.push(
+    `${flag(i.editorBridge)} Journal editor seat ${
+      i.editorBridge
+        ? "ARMED — npm run editor:sweep -- status"
+        : "empty — add LUNARA_EDITOR_KEY to .env (wp-admin → Journal Bridge → editor profile → Rotate Key)"
     }`
   );
   lines.push(

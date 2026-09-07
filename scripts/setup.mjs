@@ -39,6 +39,7 @@ if (fs.existsSync(".env")) {
 const wpSite = await ask("WordPress site", "lunarafilm.com");
 const wpUser = await ask("WordPress username", "lunarafilm");
 const wpPass = await ask("WordPress Application Password (spaces included)");
+const editorKey = await ask("Journal editor bridge key (wp-admin → Journal Bridge → Rotate Key; optional)");
 const typefully = await ask("Typefully API key");
 const gemini = await ask("Gemini API key (optional)");
 const vaultDir = await ask("Media vault folder", "./media-vault");
@@ -50,6 +51,7 @@ const envFile = [
   "WP_POST_TYPES=review,journal,posts",
   `WP_USERNAME=${wpUser}`,
   `WP_APP_PASSWORD=${wpPass}`,
+  `LUNARA_EDITOR_KEY=${editorKey}`,
   `TYPEFULLY_API_KEY=${typefully}`,
   `GEMINI_API_KEY=${gemini}`,
   `MEDIA_VAULT_DIR=${vaultDir}`,
@@ -62,6 +64,7 @@ fs.writeFileSync(".env", envFile, "utf8");
 const set = (v) => (v ? "set" : "not set");
 console.log("\n.env written. Summary (values hidden):");
 console.log(`  WordPress write  ${set(wpPass)} (${wpUser}@${wpSite})`);
+console.log(`  Editor seat      ${set(editorKey)}`);
 console.log(`  Typefully        ${set(typefully)}`);
 console.log(`  Gemini fallback  ${set(gemini)}`);
 console.log(`  Media vault      ${vaultDir}`);

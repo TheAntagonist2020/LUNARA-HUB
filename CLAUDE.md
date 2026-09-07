@@ -24,6 +24,12 @@ via `AI_PROVIDER`; auto-detects otherwise.
 - `WP_USERNAME` + `WP_APP_PASSWORD` — Application Password; arms the media
   pipeline (wp-admin → Users → Profile → Application Passwords)
 - `TYPEFULLY_API_KEY` — Typefully → Settings → Integrations → API
+- `LUNARA_EDITOR_KEY` — Journal Bridge editor-profile key (wp-admin → Journal
+  Bridge → Rotate Key). Arms the editor seat: `npm run editor:sweep --
+  status|list|show <id>|save <id> <file>|ready <id>` (scripts/editor-sweep.mjs)
+  reads Dispatch drafts parked at `needs_chatgpt_review`, saves revisions via
+  `save-validate`, and marks them READY for Dalton's one-tap publish on
+  lunarafilm.com/journal-desk/. It never publishes (`human_publish`).
 - `MEDIA_VAULT_DIR` (default ./media-vault, gitignored), `PORT`. The vault is
   rebuildable from the site's media library: `npm run vault:backfill`
   (scripts/vault-backfill.mjs) — idempotent, `--since YYYY-MM` / `--all` /

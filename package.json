@@ -13,6 +13,7 @@
     "setup": "node scripts/setup.mjs",
     "update": "node scripts/update.mjs",
     "vault:backfill": "node scripts/vault-backfill.mjs",
+    "editor:sweep": "node scripts/editor-sweep.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

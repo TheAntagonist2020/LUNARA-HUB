@@ -389,6 +389,7 @@ app.get("/api/health", async (_req, res) => {
       typefullyKey: Boolean(process.env.TYPEFULLY_API_KEY),
       wordpressSite: process.env.WP_SITE || "lunarafilm.com",
       wordpressWrite: Boolean(process.env.WP_USERNAME && process.env.WP_APP_PASSWORD),
+      editorBridge: Boolean(process.env.LUNARA_EDITOR_KEY),
     },
   });
 });

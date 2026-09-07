@@ -142,6 +142,32 @@ Publishing doesn't require the hub at all — the site is the always-on part:
 - **wp-admin** in the phone browser: review and publish Dispatch drafts.
 - **Typefully app**: the social queue.
 
+## The editor seat (lunarafilm.com/journal-desk/)
+
+The site runs its own newsroom workflow: **Lunara Dispatch** drafts film news
+every 4 hours and parks each draft at "needs review" until an AI editor
+tightens it and marks it **READY**. Then it shows up on
+[lunarafilm.com/journal-desk/](https://lunarafilm.com/journal-desk/) — a
+login-gated page that works from any phone with no PC running — for a
+one-tap human publish. Nothing publishes without that tap.
+
+Claude fills the editor seat. Put the Journal Bridge editor key in `.env` as
+`LUNARA_EDITOR_KEY` (wp-admin → Journal Bridge → editor profile → Rotate
+Key; `npm run setup` asks for it) and:
+
+```bash
+npm run editor:sweep -- status          # queue size, Dispatch's last run
+npm run editor:sweep -- list            # drafts awaiting the editor, freshest first
+npm run editor:sweep -- show 101961 --brief
+npm run editor:sweep -- save 101961 revision.json   # {title, content, excerpt, acf:{journal_deck, journal_seo_description, …}}
+npm run editor:sweep -- ready 101961    # validated → READY on the desk
+```
+
+In a Claude Code session, Claude runs those commands itself: read the draft,
+rewrite it within the site's voice rules, save, validate, mark ready. A
+scheduled routine does the same sweep 15 minutes after every Dispatch run,
+so the seat is never empty again.
+
 ## Scripts
 
 | Command | What it does |
@@ -153,6 +179,7 @@ Publishing doesn't require the hub at all — the site is the always-on part:
 | `npm run setup` | Interactive `.env` wizard — writes a guaranteed-correct config |
 | `npm run doctor` | Connection self-check with remedies |
 | `npm run vault:backfill` | Rebuild the media vault from the site's library |
+| `npm run editor:sweep -- status` | The editor seat: `status` / `list` / `show <id>` / `save <id> <file>` / `ready <id>` against the site's journal desk |
 | `npm run lint` | Type-check (`tsc --noEmit`) |
 
 Starting the hub while it's already running is safe — it tells you where the

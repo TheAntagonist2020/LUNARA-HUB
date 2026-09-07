@@ -55,8 +55,24 @@ polls its configured feeds, writes drafts in the journal voice, and attaches
 featured images itself. New sources are added in the plugin's wp-admin
 settings — nothing else.
 
-Flow: **Dispatch → draft + featured image → "Needs Attention" IFTTT phone
-ping → review (hub's Awaiting Review panel or wp-admin) → publish.**
+Flow: **Dispatch → draft + featured image (parked at `needs_chatgpt_review`)
+→ Claude editor sweep (tighten to voice, save-validate, mark READY) →
+Dalton taps Publish on lunarafilm.com/journal-desk/ (phone, no PC).**
+
+The editor seat (decided 2026-09-07): the site's Journal Control Plane was
+built with an AI-editor stage between Dispatch and Dalton. That seat sat
+empty from mid-August (ChatGPT stopped being used) and 650+ drafts piled up
+at `needs_chatgpt_review` — nothing could reach READY, so nothing published.
+Claude now fills the seat through the Journal Bridge editor profile
+(`LUNARA_EDITOR_KEY` in `.env`; `npm run editor:sweep`, see
+`scripts/editor-sweep.mjs`) — read → revise within the config's voice rules
+and banned-phrase list → `save-validate` → `journal_ready_for_review`.
+The editor never publishes: `human_publish` stays with Dalton. A scheduled
+Claude Code routine runs the sweep 15 minutes after each Dispatch run.
+
+Backlog rule: news older than ~72 hours is dead. Stale drafts go to the
+workflow state `held` (WP REST ACF write of `journal_status`; reversible,
+nothing deleted) — 2026-09-07 triage held everything created before Sept 4.
 
 Explicit decision: **no Feedly → IFTTT → capture inbound layer.** It was
 designed, then rejected as over-complication before being built. Do not
@@ -68,9 +84,11 @@ and media on demand (this playbook) · Hub = the cockpit (real state, social
 copy, Typefully, featured images).
 
 Standing security notes: the Foundation bridge's `ifttt_operator` token was
-scheduled for rotation (unknown daily ~7:30 AM caller); the `chatgpt_editor`
-bridge profile (publish scope) is legacy and can be retired at Dalton's
-discretion.
+rotated 2026-08-25 (unknown daily ~7:30 AM caller locked out). The
+`chatgpt_editor` bridge profile was re-keyed 2026-09-07 and is now the
+editor seat Claude occupies (its label in wp-admin can be renamed; the
+profile id stays). Bridge keys live only in `.env` / the cloud environment's
+variables — never in the repo.
 
 ## Hub endpoints in this pipeline
 
