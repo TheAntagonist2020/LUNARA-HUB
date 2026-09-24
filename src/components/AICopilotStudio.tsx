@@ -258,7 +258,7 @@ export const AICopilotStudio: React.FC<AICopilotStudioProps> = ({
             Typefully is not connected yet — one step to fix:
           </p>
           <p className="text-amber-200/90 leading-relaxed pl-6">
-            Open <strong>typefully.com → Settings → Integrations → API</strong>, create an API key, then add{' '}
+            Open <strong>typefully.com → Settings → API</strong>, create an API key (v2 — keys made before v2 no longer work), then add{' '}
             <code className="bg-zinc-950/80 px-1.5 py-0.5 rounded font-mono">TYPEFULLY_API_KEY=tf_...</code> to the{' '}
             <code className="bg-zinc-950/80 px-1.5 py-0.5 rounded font-mono">.env</code> file in your LUNARA-HUB folder
             and restart the app. The ⚡ Typefully buttons below will then send copy straight into your drafts.

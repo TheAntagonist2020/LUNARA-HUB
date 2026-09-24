@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SocialPost, FilmJournalEntry, PlatformMetric, LiveActivity, PostStatus } from './types';
+import { SocialPost, FilmJournalEntry, PlatformMetric, LiveActivity, PostStatus, TabId } from './types';
 import { INITIAL_FILM_JOURNAL, INITIAL_SOCIAL_POSTS, INITIAL_PLATFORM_METRICS, INITIAL_LIVE_ACTIVITIES } from './data/mockInitialData';
 import { Header } from './components/Header';
 import { CommandCenter } from './components/CommandCenter';
@@ -10,10 +10,28 @@ import { AICopilotStudio } from './components/AICopilotStudio';
 import { NewPostModal } from './components/NewPostModal';
 import { NewJournalModal } from './components/NewJournalModal';
 import { InstanceConnectionsModal } from './components/InstanceConnectionsModal';
+import { Newsreel } from './components/Newsreel';
 
 export default function App() {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<'command' | 'planner' | 'journal' | 'analytics' | 'copilot'>('command');
+  // Navigation State — the Newsreel is the front door; the last tab you used
+  // is remembered per device.
+  const [activeTab, setActiveTabState] = useState<TabId>(() => {
+    try {
+      const saved = localStorage.getItem('lunara_tab') as TabId | null;
+      return saved && ['newsreel', 'command', 'planner', 'journal', 'analytics', 'copilot'].includes(saved) ? saved : 'newsreel';
+    } catch {
+      return 'newsreel';
+    }
+  });
+  const setActiveTab = (tab: TabId) => {
+    setActiveTabState(tab);
+    try {
+      localStorage.setItem('lunara_tab', tab);
+    } catch {
+      // storage blocked — the tab just won't be remembered
+    }
+    window.scrollTo({ top: 0 });
+  };
 
   // Core Data State with Local Storage fallback
   const [posts, setPosts] = useState<SocialPost[]>(() => {
@@ -252,8 +270,10 @@ export default function App() {
         lastSyncTime={lastSyncTime}
       />
 
-      {/* Main View Container */}
-      <main className="max-w-7xl mx-auto px-4 lg:px-8 py-8">
+      {/* Main View Container — bottom padding clears the phone tab bar */}
+      <main className={`max-w-7xl mx-auto px-4 lg:px-8 ${activeTab === 'newsreel' ? 'pt-4 md:pt-8' : 'pt-6 md:pt-8'} pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8`}>
+
+        {activeTab === 'newsreel' && <Newsreel />}
         
         {activeTab === 'command' && (
           <CommandCenter
@@ -334,7 +354,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-900 py-6 text-center text-xs text-zinc-600 font-mono">
+      <footer className="hidden md:block border-t border-zinc-900 py-6 text-center text-xs text-zinc-600 font-mono">
         <p>LUNARA FILM © 2026 • Cinema Journal & Real-Time Social Media Engagement Hub</p>
       </footer>
 
