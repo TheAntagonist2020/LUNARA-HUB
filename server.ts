@@ -2136,6 +2136,129 @@ app.post("/api/news/take", async (req, res) => {
   }
 });
 
+// --- Workshop: Dalton and Claude hone a take together -------------------------
+// Stateless on the server: the hub sends the story, the current draft, and the
+// conversation so far; the model answers as Dalton's editor and hands back a
+// revised draft in his voice.
+
+interface WorkshopMessage {
+  role: "dalton" | "claude";
+  text: string;
+}
+
+const REFINE_KEYS = ["reply", "take", "post"];
+
+function refinePromptBody(s: TakeStory, current: { take: string; post: string }, messages: WorkshopMessage[]): string {
+  const convo = messages
+    .slice(-12)
+    .map((m) => `${m.role === "dalton" ? "DALTON" : "YOU"}: ${m.text}`)
+    .join("\n");
+  return `${newsreelVoice()}
+
+---
+
+You are Dalton's editor on the LUNARA news desk, working a take with him in real time. He writes the takes; your job is to get the draft to sound exactly like him and say what he means. Follow his notes. If he writes a line himself, keep his wording and build around it. If a note would break a fact or the voice, say so briefly and offer the closest version that works.
+
+The story (the only facts you have):
+- Headline: ${s.title}
+- Outlet: ${s.source}
+- Category: ${s.category || "news"}${s.film?.title ? `\n- Film: ${s.film.title}${s.film.year ? ` (${s.film.year})` : ""}` : ""}
+- What the outlet reported: ${s.summary || "(headline only)"}
+
+Outside credits only if famous and certain. Never invent numbers, dates, quotes, reactions, or cast.
+
+Current draft:
+- take: ${current.take || "(none yet)"}
+- post: ${current.post || "(none yet)"}
+
+Conversation so far (latest note last):
+${convo}
+
+Return:
+1. reply: one or two sentences to Dalton, plain and direct, about what you changed or a pushback. No flattery, no "Great note!".
+2. take: the revised take, 2–4 sentences, 40–90 words, in his voice. If his note was only about the post, return the take unchanged.
+3. post: the revised post for X / Threads / Bluesky, max 240 characters, no link, no hashtags, no emoji. If his note was only about the take, still keep the post consistent with it.`;
+}
+
+async function askRefine(provider: "claude" | "gemini", prompt: string) {
+  let data: any;
+  if (provider === "claude") {
+    const raw = await runClaudeCli(`${prompt}
+
+Respond with ONLY a valid JSON object — no markdown fences, no commentary — with exactly these keys:
+{"reply": string, "take": string, "post": string}`);
+    data = validateKeys(extractJsonObject(raw), REFINE_KEYS);
+  } else {
+    const ai = getGeminiAI();
+    if (!ai) throw new Error("GEMINI_API_KEY not configured");
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: { reply: { type: Type.STRING }, take: { type: Type.STRING }, post: { type: Type.STRING } },
+          required: REFINE_KEYS,
+        },
+      },
+    });
+    if (!response.text) throw new Error("No response generated from Gemini.");
+    data = validateKeys(JSON.parse(response.text), REFINE_KEYS);
+  }
+  return { reply: String(data.reply || "").trim(), take: String(data.take || "").trim(), post: String(data.post || "").trim() };
+}
+
+app.post("/api/news/refine", async (req, res) => {
+  const { id, story: clientStory, current, messages } = req.body || {};
+  const known = wireState?.stories.find((s) => s.id === id);
+  const story: TakeStory | null = known
+    ? { ...applyEnrichment(known) }
+    : clientStory?.title
+      ? {
+          id: String(id || ""),
+          title: String(clientStory.title).slice(0, 300),
+          source: String(clientStory.source || "the trades").slice(0, 80),
+          summary: String(clientStory.summary || "").slice(0, 600),
+          category: String(clientStory.category || "news"),
+          film: clientStory.film?.title ? { title: String(clientStory.film.title), year: clientStory.film.year } : undefined,
+        }
+      : null;
+  if (!story) return res.status(404).json({ error: "Story not found — refresh the reel." });
+  const thread: WorkshopMessage[] = (Array.isArray(messages) ? messages : [])
+    .filter((m: any) => m && (m.role === "dalton" || m.role === "claude") && typeof m.text === "string")
+    .map((m: any) => ({ role: m.role, text: m.text.slice(0, 2000) }));
+  if (!thread.length || thread[thread.length - 1].role !== "dalton") {
+    return res.status(400).json({ error: "Send a note to work from." });
+  }
+  const draft = { take: String(current?.take || "").slice(0, 1200), post: String(current?.post || "").slice(0, 600) };
+
+  const order = (await resolveProviderOrder()).filter((p) => p !== "template") as Array<"claude" | "gemini">;
+  if (!order.length) {
+    return res.status(503).json({ error: "The Workshop needs Claude or Gemini — log in to the Claude CLI or add a Gemini key." });
+  }
+  let lastError: Error | null = null;
+  for (const provider of order) {
+    try {
+      const prompt = refinePromptBody(story, draft, thread);
+      let result = await askRefine(provider, prompt);
+      const problems = voiceProblems(result);
+      if (problems.length) {
+        const retry = await askRefine(
+          provider,
+          `${prompt}\n\nYour previous revision broke the voice: ${problems.join("; ")}. Revise again without those problems.`
+        ).catch(() => result);
+        if (voiceProblems(retry).length <= problems.length) result = retry;
+      }
+      return res.json({ success: true, provider, ...result });
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[ai] workshop provider "${provider}" failed: ${err.message} — trying next`);
+    }
+  }
+  res.status(502).json({ error: lastError?.message || "Couldn't reach Claude or Gemini." });
+});
+
 // ---------------------------------------------------------------------------
 // Start Express + Vite server
 // ---------------------------------------------------------------------------

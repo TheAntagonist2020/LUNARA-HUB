@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowUpRight, Flame, LoaderCircle, Play, RefreshCw, Star } from 'lucide-react';
-import { HotTake, NewsStory, Spice } from '../../types';
+import { HotTake, NewsStory, Spice, WorkshopThread } from '../../types';
+import { TakeWorkshop } from './TakeWorkshop';
 import { StoryImage } from './StoryCard';
 import { DispatchIntegrations, DispatchPanel } from './DispatchPanel';
 import { CATEGORY_META, timeAgo } from './wire';
@@ -28,6 +29,9 @@ interface StoryDetailProps {
   saved: boolean;
   onToggleSave: () => void;
   integrations: DispatchIntegrations | null;
+  thread: WorkshopThread;
+  onThread: (update: (thread: WorkshopThread) => WorkshopThread) => void;
+  onTake: (take: HotTake) => void;
 }
 
 // Tap-to-play: a still until asked, then the official upload via
@@ -77,6 +81,9 @@ export const StoryDetail: React.FC<StoryDetailProps> = ({
   saved,
   onToggleSave,
   integrations,
+  thread,
+  onThread,
+  onTake,
 }) => {
   const meta = CATEGORY_META[story.category];
   const when = timeAgo(story.publishedAt);
@@ -187,6 +194,8 @@ export const StoryDetail: React.FC<StoryDetailProps> = ({
               : `Turn it ${SPICES.findIndex((s) => s.id === spice) > SPICES.findIndex((s) => s.id === take.spice) ? 'up' : 'down'}`}
         </button>
       </section>
+
+      <TakeWorkshop story={story} take={take} spice={spice} thread={thread} onThread={onThread} onTake={onTake} />
 
       {/* About the film (TMDB) */}
       {film && (
