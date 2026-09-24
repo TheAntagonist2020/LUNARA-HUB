@@ -55,6 +55,13 @@ export interface HotTake {
   spice: Spice;
 }
 
+// A Workshop session on one story: the back-and-forth with Claude, plus the
+// earlier versions of the take for undo.
+export interface WorkshopThread {
+  messages: Array<{ role: 'dalton' | 'claude'; text: string }>;
+  versions: Array<{ take: string; post: string }>;
+}
+
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'queued';
 
 export interface EngagementStats {

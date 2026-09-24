@@ -66,6 +66,9 @@ modal all read. Keep any new integration reporting there.
   journal voice rules + lines from his published posts; re-read on change).
   Drafts using banned phrases get one rewrite. No model → no take (canned
   lines can't sound like him)
+- `POST /api/news/refine` — the Workshop: Dalton's notes + the current draft
+  → Claude (as his editor) returns a reply and a revised take/post, same
+  voice file and voice check. Stateless; the thread lives in the browser
 
 ## Site facts (lunarafilm.com — WordPress.com Atomic)
 

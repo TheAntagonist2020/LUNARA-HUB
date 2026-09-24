@@ -12,7 +12,8 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { HotTake, NewsCategory, NewsStory, Spice, WireSourceStatus } from '../types';
+import { HotTake, NewsCategory, NewsStory, Spice, WireSourceStatus, WorkshopThread } from '../types';
+import { EMPTY_THREAD } from './newsreel/TakeWorkshop';
 import { StoryCard, StoryCardHandle, StoryImage } from './newsreel/StoryCard';
 import { StoryDetail } from './newsreel/StoryDetail';
 import { DispatchIntegrations } from './newsreel/DispatchPanel';
@@ -20,6 +21,7 @@ import { CATEGORY_META, CATEGORY_ORDER, loadJson, saveJson, showtime, timeAgo } 
 
 const SEEN_KEY = 'lunara_newsreel_seen';
 const SAVED_KEY = 'lunara_newsreel_saved';
+const WORKSHOP_KEY = 'lunara_newsreel_workshop_v1';
 // v2: takes written from voice/newsreel-voice.md; drops takes saved by the old prompt.
 const TAKES_KEY = 'lunara_newsreel_takes_v2';
 const PREFS_KEY = 'lunara_newsreel_prefs';
@@ -105,6 +107,10 @@ export const Newsreel: React.FC = () => {
   useEffect(() => saveJson(SEEN_KEY, seen.slice(-600)), [seen]);
   useEffect(() => saveJson(SAVED_KEY, saved.slice(0, 100)), [saved]);
   useEffect(() => saveJson(TAKES_KEY, Object.fromEntries(Object.entries(takes).slice(-120))), [takes]);
+  const [workshops, setWorkshops] = useState<Record<string, WorkshopThread>>(() =>
+    loadJson(WORKSHOP_KEY, {} as Record<string, WorkshopThread>)
+  );
+  useEffect(() => saveJson(WORKSHOP_KEY, Object.fromEntries(Object.entries(workshops).slice(-60))), [workshops]);
 
   const [history, setHistory] = useState<Array<{ id: string; dir: 1 | -1 }>>([]);
   const [enterFrom, setEnterFrom] = useState<{ id: string; dir: 1 | -1 } | null>(null);
@@ -364,6 +370,9 @@ export const Newsreel: React.FC = () => {
       saved={savedIds.has(story.id)}
       onToggleSave={() => toggleSave(story)}
       integrations={integrations}
+      thread={workshops[story.id] || EMPTY_THREAD}
+      onThread={(update) => setWorkshops((p) => ({ ...p, [story.id]: update(p[story.id] || EMPTY_THREAD) }))}
+      onTake={(next) => setTakes((p) => ({ ...p, [story.id]: next }))}
     />
   );
 

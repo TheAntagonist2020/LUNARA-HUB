@@ -65,6 +65,12 @@ dark and full-bleed, one story at a time.
   phrase ("this matters because", "only time will tell"…) gets one rewrite.
   With no model reachable you get the outlet's facts and no take, never a
   canned line. Takes are drafts: check any credit before posting.
+- **Workshop:** under every take, a back-and-forth with Claude right in the
+  hub. Type a note ("too polite", "lose the Sweeney line", or the exact line
+  you'd say) or tap a quick note; Claude answers like an editor and hands back
+  a revised take and post in your voice. Edit the take by hand any time, undo
+  steps back through versions, and the dispatch composer always uses the
+  latest. The conversation is saved per story on that device.
 - **Dispatch:** each take becomes an editable post (X and Bluesky character
   counts, `via Outlet` credit, link) that you can send to **Typefully** (draft or
   next free slot) or **Buffer** (queue, share next, or draft).
