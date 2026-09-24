@@ -14,7 +14,7 @@ const SPICES: Array<{ id: Spice; label: string }> = [
 const PROVIDER_LABEL: Record<HotTake['provider'], string> = {
   claude: 'Written by Claude',
   gemini: 'Written by Gemini',
-  template: 'Offline template — connect Claude or Gemini for a real take',
+  template: 'No model reachable',
 };
 
 interface StoryDetailProps {
@@ -145,7 +145,14 @@ export const StoryDetail: React.FC<StoryDetailProps> = ({
           </div>
         </div>
 
-        {take && !takeLoading && (
+        {take && !take.take && !takeLoading && (
+          <p className="text-[13px] text-zinc-400 leading-relaxed">
+            No take this time: the hub couldn't reach Claude or Gemini, and a canned line wouldn't sound like you.
+            Check that the Claude CLI is logged in (or add a Gemini key), then hit Re-take.
+          </p>
+        )}
+
+        {take && take.take && !takeLoading && (
           <div className="space-y-3">
             <p className="font-serif italic text-[1.35rem] leading-snug text-amber-50">“{take.take}”</p>
             {take.summary && take.provider !== 'template' && (

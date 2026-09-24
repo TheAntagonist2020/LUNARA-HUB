@@ -62,7 +62,10 @@ modal all read. Keep any new integration reporting there.
   YouTube trailers, enriched with TMDB art/trailers; cached 10 min,
   `?refresh=1`, `?wait=0`. Read-only — never creates site drafts
 - `POST /api/news/take` — hot take + social copy for a wire story via the
-  provider chain (facts only from the outlet's summary)
+  provider chain, written as Dalton from **`voice/newsreel-voice.md`** (his
+  journal voice rules + lines from his published posts; re-read on change).
+  Drafts using banned phrases get one rewrite. No model → no take (canned
+  lines can't sound like him)
 
 ## Site facts (lunarafilm.com — WordPress.com Atomic)
 

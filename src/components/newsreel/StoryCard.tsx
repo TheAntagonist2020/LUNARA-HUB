@@ -193,7 +193,7 @@ export const StoryCard = forwardRef<StoryCardHandle, StoryCardProps>(
               {story.title}
             </h2>
           </div>
-          {take ? (
+          {take?.take ? (
             <p className="text-[13px] leading-snug text-amber-100/90 font-serif italic line-clamp-3 [@media(max-height:720px)]:line-clamp-2">
               <Flame className="inline w-3.5 h-3.5 -mt-0.5 mr-1 text-[#D4AF37] not-italic" />
               {take.take}
