@@ -31,8 +31,12 @@ const run = (cmd, args, label) => {
 };
 
 const pullOutput = run("git", ["pull"], "Pulling latest changes");
-if (/package(-lock)?\.json/.test(pullOutput)) {
-  run(npmCmd, ["install"], "Dependencies changed — installing");
+// Also install when the build tools are missing (fresh clone, deleted or
+// half-finished node_modules) — otherwise the build fails with "'vite' is
+// not recognized".
+const toolsMissing = !fs.existsSync("node_modules/vite/package.json") || !fs.existsSync("node_modules/esbuild/package.json");
+if (/package(-lock)?\.json/.test(pullOutput) || toolsMissing) {
+  run(npmCmd, ["install"], toolsMissing ? "Dependencies missing — installing" : "Dependencies changed — installing");
 }
 run(npmCmd, ["run", "build"], "Building");
 

@@ -1914,15 +1914,75 @@ app.get("/api/news/feed", async (req, res) => {
 });
 
 // --- Hot takes ----------------------------------------------------------------
+// Takes are written as Dalton, from voice/newsreel-voice.md: his journal voice
+// rules plus lines from his own published posts. The file is re-read whenever
+// it changes, so the voice can be tuned without touching code or restarting.
 
 type Spice = "mild" | "hot" | "scorching";
 
+const VOICE_FILE = path.join(process.cwd(), "voice", "newsreel-voice.md");
+let voiceCache: { mtimeMs: number; text: string } | null = null;
+
+function newsreelVoice(): string {
+  try {
+    const { mtimeMs } = fs.statSync(VOICE_FILE);
+    if (!voiceCache || voiceCache.mtimeMs !== mtimeMs) {
+      voiceCache = { mtimeMs, text: fs.readFileSync(VOICE_FILE, "utf8") };
+    }
+    return voiceCache.text;
+  } catch {
+    // Missing file (odd install): the short version still beats nothing.
+    return "Write as Dalton, first person, conversational and opinion-first: the point in the first sentence, specifics dropped in passing, a short landing line. Never hedge, never summarize the press release, never invent facts.";
+  }
+}
+
 const SPICE_NOTES: Record<Spice, string> = {
-  mild: "Warm, witty, sure-footed — a knowing smile, not a shove.",
-  hot: "A clear, confident stance someone will want to argue with. Bold but fair.",
+  mild: "The fan leads. Real warmth or excitement, still a clear position, a landing with a smile in it.",
+  hot: "Dalton's default register: a clear call, one or two sharp specifics, a short verdict line to close.",
   scorching:
-    "Maximum conviction: a genuinely debatable claim, delivered like a verdict. Provocative about the work and the business — never cruel about anyone's body, private life, or identity.",
+    "Savage. Name exactly why the choice is smart or baffling, no cushioning, specifics behind every shot. Brutal about the work and the business, never about anyone's body, private life, or identity.",
 };
+
+// Phrases the journal voice bans outright — a draft that uses one gets sent
+// back once with the offenders named.
+const VOICE_BANNED: Array<[RegExp, string]> = [
+  [/\bthis matters because\b/i, "this matters because"],
+  [/\bthis is significant\b/i, "this is significant"],
+  [/\bthis (?:trend )?signals\b/i, "this signals"],
+  [/\b(?:it'?s|it is) worth noting\b|\bworth noting\b/i, "worth noting"],
+  [/\bnotably\b/i, "notably"],
+  [/\bas (?:we|you) know\b/i, "as we know"],
+  [/\bfor context\b/i, "for context"],
+  [/\brecall that\b/i, "recall that"],
+  [/\bit bears mentioning\b/i, "it bears mentioning"],
+  [/\bonly time will tell\b/i, "only time will tell"],
+  [/\bhighly anticipated\b/i, "highly anticipated"],
+  [/\bfans will be\b/i, "fans will be"],
+  [/\bcould potentially\b/i, "could potentially"],
+  [/\breshap(?:e|es|ing) the landscape\b/i, "reshaping the landscape"],
+  [/\bbroader trend\b/i, "broader trend"],
+  [/\bbuckle up\b/i, "buckle up"],
+  [/\bfilm fans\b/i, "film fans"],
+  [/\bgame[- ]changer\b/i, "game-changer"],
+  [/\blet that sink in\b/i, "let that sink in"],
+  [/\bjust announced\b/i, "just announced"],
+  [/\bwhat do you think\b|\bthoughts\?/i, "a generic 'thoughts?' closer"],
+  [/\bis the real story\b/i, "is the real story"],
+  [/\btells you exactly\b/i, "tells you exactly"],
+];
+
+function voiceProblems(data: { take: string; post: string }): string[] {
+  const problems: string[] = [];
+  const text = `${data.take}\n${data.post}`;
+  for (const [re, label] of VOICE_BANNED) if (re.test(text)) problems.push(`uses "${label}"`);
+  if (/\p{Extended_Pictographic}/u.test(text)) problems.push("uses emoji");
+  if (/#\w/.test(data.post)) problems.push("puts hashtags in the post");
+  if (data.post.length > 260) problems.push(`post is ${data.post.length} characters (max 240)`);
+  const words = data.take.split(/\s+/).filter(Boolean).length;
+  if (words > 110) problems.push(`take is ${words} words (max 90)`);
+  if (words < 15) problems.push("take is too thin to carry a position");
+  return problems;
+}
 
 interface TakeStory {
   id?: string;
@@ -1934,82 +1994,36 @@ interface TakeStory {
 }
 
 function takePromptBody(s: TakeStory, spice: Spice): string {
-  return `You run the news desk at LUNARA FILM (lunarafilm.com), a film journal with an editorial, cinephile voice. Turn this wire story into a hot take built to move on social.
+  return `${newsreelVoice()}
 
-House voice: fun and professional — savage enthusiasm, opinion-forward, the point arrives in the first clause. Wit over snark. No throat-clearing, no "Hey film fans!", no "buckle up", no emoji spam, no corporate filler. Write like a critic who loves movies too much to be polite about them.
-Heat level: ${spice.toUpperCase()} — ${SPICE_NOTES[spice]}
+---
 
-Hard rule: use ONLY the facts below. Never invent release dates, box-office numbers, quotes, cast, plot details, or audience reactions. If the story is thin, make the take about what it signals — not about facts you don't have.
+Write the Newsreel take on the wire story below, as Dalton, in exactly the voice above. Study the examples: that rhythm and that kind of specific, not generic "critic" copy.
 
-Story:
+Heat: ${spice.toUpperCase()} — ${SPICE_NOTES[spice]}
+
+The story (these are the only facts you have about it):
 - Headline: ${s.title}
 - Outlet: ${s.source}
 - Category: ${s.category || "news"}${s.film?.title ? `\n- Film: ${s.film.title}${s.film.year ? ` (${s.film.year})` : ""}` : ""}
 - What the outlet reported: ${s.summary || "(headline only)"}
 
+Beyond these facts, mention an outside credit only if it is famous and you are certain of it — a wrong credit under Dalton's name is worse than no credit. When in doubt, leave it out. Never invent numbers, dates, quotes, reactions, or cast.
+
 Return:
-1. summary: one neutral sentence (max 30 words) on what happened — the facts, straight.
-2. take: the LUNARA hot take, 1–2 sentences (max 45 words).
-3. post: a ready-to-post line for X / Threads / Bluesky, max 220 characters, built on the take and ending on a hook that invites replies. No hashtags, no links, at most one emoji.
-4. hashtags: 2–3 hashtags specific to the film or topic (no generic #Movies spam).`;
+1. summary: one plain sentence on what happened, max 30 words. This line is NOT in the voice — it is the neutral fact line under the headline.
+2. take: Dalton's take, 2–4 sentences, 40–90 words. The position in the first sentence, one or two specifics carrying it, a short landing line to close.
+3. post: the take cut down for X / Threads / Bluesky, max 240 characters, no link, no hashtags, no emoji. It must sound like Dalton talking, not a caption. End on the landing, or on a sharp question only if the story has a real tension worth arguing about.
+4. hashtags: 0–2 tags, only ones film Twitter actually uses for this (e.g. the title as a tag). Otherwise an empty list.`;
 }
 
 const TAKE_REQUIRED_KEYS = ["summary", "take", "post", "hashtags"];
 
-// Offline lines frame the story without asserting anything about it — the
-// facts on the card always come from the outlet's own summary.
-const TEMPLATE_TAKES: Record<NewsCategory, string[]> = {
-  trailers: [
-    "Two minutes of footage, a week of arguments. Press play and pick a side.",
-    "The trailer is out, which means the internet has already decided. We'd rather decide in a theater.",
-    "Every frame of this will be screenshotted, zoomed and over-read by midnight. Good. That's the job.",
-  ],
-  casting: [
-    "Casting is the first review a movie gets — and this one opens with a strong line.",
-    "The kind of casting news that sends you straight to the release calendar.",
-    "Say what you want about the choice. Nobody's calling it boring.",
-  ],
-  boxoffice: [
-    "Box office is a scoreboard, not a verdict — but this weekend's scoreboard has opinions.",
-    "The numbers are in, and the narrative is already outrunning them.",
-    "Studios will spin this for weeks. The audience already voted.",
-  ],
-  awards: [
-    "Awards season is a long game, and this is one more tell.",
-    "Festival buzz is weather, not a forecast. Still — the pressure's dropping.",
-    "The race just got louder. Place your bets, carefully.",
-  ],
-  streaming: [
-    "The streaming wars keep producing headlines. The question is whether they keep producing movies.",
-    "Another move on the streaming chessboard. Watch the pieces, not the press release.",
-    "Straight to your couch — which says something, one way or another.",
-  ],
-  reviews: [
-    "The reviews are landing. Read the argument, not the score.",
-    "A critic has spoken. Now the rest of us get to be wrong about it in public.",
-    "Verdicts are in. Ours comes after the lights go down.",
-  ],
-  news: [
-    "File this under things we'll still be arguing about on Friday.",
-    "Small headline, big tell. Read it twice.",
-    "Hollywood made a move. We have notes.",
-  ],
-};
-
-const hashtagOf = (s: string) => `#${s.replace(/[^a-zA-Z0-9]/g, "")}`;
-
-function templateTake(s: TakeStory, spice: Spice) {
-  const lines = TEMPLATE_TAKES[(s.category as NewsCategory) || "news"] || TEMPLATE_TAKES.news;
-  const seed = [...(s.id || s.title)].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7);
-  const take = lines[(seed + ["mild", "hot", "scorching"].indexOf(spice)) % lines.length];
+// No model, no take: canned lines can't sound like Dalton, so offline mode
+// returns the outlet's facts and leaves the take empty.
+function templateTake(s: TakeStory) {
   const firstSentence = (s.summary || "").match(/^.{20,240}?[.!?](?=\s|$)/)?.[0] || s.summary || s.title;
-  const post = `${s.title} — ${take}`;
-  return {
-    summary: firstSentence,
-    take,
-    post: post.length > 220 ? `${post.slice(0, 217).replace(/\s+\S*$/, "")}…` : post,
-    hashtags: ["#LunaraFilm", ...(s.film?.title ? [hashtagOf(s.film.title)] : [])],
-  };
+  return { summary: firstSentence, take: "", post: s.title, hashtags: [] as string[] };
 }
 
 function cleanTake(data: any) {
@@ -2022,8 +2036,39 @@ function cleanTake(data: any) {
       .map((t: string) => String(t).trim())
       .filter(Boolean)
       .map((t: string) => (t.startsWith("#") ? t : `#${t}`).replace(/\s+/g, ""))
-      .slice(0, 3),
+      .slice(0, 2),
   };
+}
+
+async function draftTake(provider: "claude" | "gemini", prompt: string) {
+  if (provider === "claude") {
+    const raw = await runClaudeCli(`${prompt}
+
+Respond with ONLY a valid JSON object — no markdown fences, no commentary — with exactly these keys:
+{"summary": string, "take": string, "post": string, "hashtags": string[]}`);
+    return cleanTake(validateKeys(extractJsonObject(raw), TAKE_REQUIRED_KEYS));
+  }
+  const ai = getGeminiAI();
+  if (!ai) throw new Error("GEMINI_API_KEY not configured");
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          take: { type: Type.STRING },
+          post: { type: Type.STRING },
+          hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
+        },
+        required: TAKE_REQUIRED_KEYS,
+      },
+    },
+  });
+  if (!response.text) throw new Error("No response generated from Gemini.");
+  return cleanTake(validateKeys(JSON.parse(response.text), TAKE_REQUIRED_KEYS));
 }
 
 async function generateHotTake(s: TakeStory, spice: Spice): Promise<{ provider: ProviderName; data: any }> {
@@ -2032,40 +2077,19 @@ async function generateHotTake(s: TakeStory, spice: Spice): Promise<{ provider: 
 
   for (const provider of order) {
     try {
-      if (provider === "claude") {
-        const prompt = `${takePromptBody(s, spice)}
+      if (provider === "template") return { provider, data: templateTake(s) };
+      const prompt = takePromptBody(s, spice);
+      const first = await draftTake(provider, prompt);
+      const problems = voiceProblems(first);
+      if (!problems.length) return { provider, data: first };
+      // One rewrite with the exact problems named; keep whichever is cleaner.
+      const second = await draftTake(
+        provider,
+        `${prompt}
 
-Respond with ONLY a valid JSON object — no markdown fences, no commentary — with exactly these keys:
-{"summary": string, "take": string, "post": string, "hashtags": string[]}`;
-        const raw = await runClaudeCli(prompt);
-        return { provider, data: cleanTake(validateKeys(extractJsonObject(raw), TAKE_REQUIRED_KEYS)) };
-      }
-
-      if (provider === "gemini") {
-        const ai = getGeminiAI();
-        if (!ai) throw new Error("GEMINI_API_KEY not configured");
-        const response = await ai.models.generateContent({
-          model: GEMINI_MODEL,
-          contents: takePromptBody(s, spice),
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                summary: { type: Type.STRING },
-                take: { type: Type.STRING },
-                post: { type: Type.STRING },
-                hashtags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              },
-              required: TAKE_REQUIRED_KEYS,
-            },
-          },
-        });
-        if (!response.text) throw new Error("No response generated from Gemini.");
-        return { provider, data: cleanTake(validateKeys(JSON.parse(response.text), TAKE_REQUIRED_KEYS)) };
-      }
-
-      return { provider: "template", data: templateTake(s, spice) };
+Your previous draft broke the voice: ${problems.join("; ")}. Previous take: "${first.take}" Rewrite it so it sounds like Dalton — same facts, no banned phrases.`
+      ).catch(() => first);
+      return { provider, data: voiceProblems(second).length <= problems.length ? second : first };
     } catch (err: any) {
       lastError = err;
       console.warn(`[ai] provider "${provider}" failed: ${err.message} — trying next`);

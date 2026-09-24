@@ -57,10 +57,14 @@ dark and full-bleed, one story at a time.
   and **official trailer** (verified against the YouTube channel name), and
   the detail sheet shows the poster, release date, and synopsis. The
   Lunara Database Engine's TMDB key works here too.
-- **Hot takes:** the take runs through the same Claude CLI → Gemini →
-  offline-template chain as the Copilot Studio, at three heat levels (Mild,
-  Hot, Scorching). It's built only from the outlet's reported facts: no
-  invented dates, numbers, or quotes. Offline templates are labeled as templates.
+- **Hot takes, in your voice:** written as you, from
+  [`voice/newsreel-voice.md`](voice/newsreel-voice.md) — your journal voice
+  rules plus lines from your own published posts. Edit that file to tune the
+  voice; the next take picks it up, no restart. Three heat levels (Mild, Hot,
+  Scorching) through the Claude CLI → Gemini chain; a draft that uses a banned
+  phrase ("this matters because", "only time will tell"…) gets one rewrite.
+  With no model reachable you get the outlet's facts and no take, never a
+  canned line. Takes are drafts: check any credit before posting.
 - **Dispatch:** each take becomes an editable post (X and Bluesky character
   counts, `via Outlet` credit, link) that you can send to **Typefully** (draft or
   next free slot) or **Buffer** (queue, share next, or draft).

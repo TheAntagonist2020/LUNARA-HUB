@@ -20,7 +20,8 @@ import { CATEGORY_META, CATEGORY_ORDER, loadJson, saveJson, showtime, timeAgo } 
 
 const SEEN_KEY = 'lunara_newsreel_seen';
 const SAVED_KEY = 'lunara_newsreel_saved';
-const TAKES_KEY = 'lunara_newsreel_takes';
+// v2: takes written from voice/newsreel-voice.md; drops takes saved by the old prompt.
+const TAKES_KEY = 'lunara_newsreel_takes_v2';
 const PREFS_KEY = 'lunara_newsreel_prefs';
 
 interface Prefs {
@@ -606,7 +607,7 @@ export const Newsreel: React.FC = () => {
                     <p className="text-[9px] font-mono uppercase tracking-[0.18em] text-[#D4AF37]">
                       {CATEGORY_META[s.category].label}
                       <span className="text-zinc-600"> · {s.source}{s.publishedAt ? ` · ${timeAgo(s.publishedAt)}` : ''}</span>
-                      {takes[s.id] && <Flame className="inline w-3 h-3 ml-1.5 -mt-0.5 text-[#D4AF37]" />}
+                      {takes[s.id]?.take && <Flame className="inline w-3 h-3 ml-1.5 -mt-0.5 text-[#D4AF37]" />}
                     </p>
                     <p className="font-serif text-[15px] leading-snug text-zinc-100 line-clamp-2">{s.title}</p>
                   </div>
