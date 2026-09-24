@@ -1,7 +1,9 @@
 # LUNARA FILM Hub
 
 Local dashboard + publishing cockpit for lunarafilm.com (Dalton's film journal).
-React 19 + Vite frontend, Express backend in `server.ts` (single file), run with
+React 19 + Vite frontend (opens on the swipeable Newsreel,
+`src/components/Newsreel.tsx` + `src/components/newsreel/`), Express backend
+in `server.ts` (single file), run with
 `npm run dev` at http://localhost:3000. Type-check with `npm run lint`
 (tsc --noEmit); production: `npm run build` then `npm start`.
 
@@ -23,7 +25,14 @@ via `AI_PROVIDER`; auto-detects otherwise.
 - `WP_SITE` (lunarafilm.com), `WP_POST_TYPES` (review,journal,posts)
 - `WP_USERNAME` + `WP_APP_PASSWORD` — Application Password; arms the media
   pipeline (wp-admin → Users → Profile → Application Passwords)
-- `TYPEFULLY_API_KEY` — Typefully → Settings → Integrations → API
+- `TYPEFULLY_API_KEY` — Typefully → Settings → API (**API v2**; v1 died
+  2026-06-15, v1 keys don't work). Optional `TYPEFULLY_SOCIAL_SET_ID`,
+  `TYPEFULLY_PLATFORMS`
+- `BUFFER_API_KEY` — Buffer → Settings → API (GraphQL, Free plan OK);
+  optional `BUFFER_CHANNEL_IDS`
+- `TMDB_API_KEY` — free; official key art + official trailers in the Newsreel
+  (v3 key or v4 read token). `NEWS_FEEDS` / `NEWS_TRAILER_CHANNELS` replace
+  the default wire sources
 - `MEDIA_VAULT_DIR` (default ./media-vault, gitignored), `PORT`. The vault is
   rebuildable from the site's media library: `npm run vault:backfill`
   (scripts/vault-backfill.mjs) — idempotent, `--since YYYY-MM` / `--all` /
@@ -44,7 +53,16 @@ modal all read. Keep any new integration reporting there.
   Automation architecture section
 - `POST /api/wordpress/featured-image` — image URL → media-vault backup →
   WP media library → featured image (supports `postType` for CPTs)
-- `POST /api/typefully/draft` — content → Typefully drafts (or next queue slot)
+- `POST /api/typefully/draft` — content (+ optional official `imageUrl`) →
+  Typefully v2 drafts (or next free slot); `GET /api/typefully/status` is the
+  real key check
+- `GET /api/buffer/channels`, `POST /api/buffer/post` — Buffer queue / share
+  next / draft (never publish-now)
+- `GET /api/news/feed` — the Newsreel wire: trade RSS + official studio
+  YouTube trailers, enriched with TMDB art/trailers; cached 10 min,
+  `?refresh=1`, `?wait=0`. Read-only — never creates site drafts
+- `POST /api/news/take` — hot take + social copy for a wire story via the
+  provider chain (facts only from the outlet's summary)
 
 ## Site facts (lunarafilm.com — WordPress.com Atomic)
 
@@ -61,7 +79,9 @@ modal all read. Keep any new integration reporting there.
 
 - Featured image is the hero; never place hero images in post content
 - Trailers go in `_lunara_trailer_*` meta, never as raw embeds
-- Official assets only, always credited, always alt-texted
+- Official assets only, always credited, always alt-texted. In the Newsreel,
+  outlet feed photos are display-only (`image.official: false`); only TMDB
+  key art / official trailer stills may be attached to social posts
 - Every uploaded image gets a media-vault backup
 - No fake data in the UI: dashboards show real state or honest empty/demo
   labels — never fabricated metrics (the original AI Studio export did this;

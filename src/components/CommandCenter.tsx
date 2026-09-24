@@ -83,6 +83,8 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
   };
   const aiEngine = health ? aiEngineLabels[health.aiProviderOrder?.[0]] || 'Offline templates' : '…';
   const typefullyOn = Boolean(health?.integrations?.typefullyKey);
+  const bufferOn = Boolean(health?.integrations?.bufferKey);
+  const dispatchCount = Number(typefullyOn) + Number(bufferOn);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -165,14 +167,16 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
         <motion.div {...rise(0.26)} className={`${panelClass} group p-6 space-y-1 hover:-translate-y-0.5`}>
           <Hairline />
           <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Typefully</p>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500 font-semibold">Social Dispatch</p>
             <Zap className="w-4 h-4 text-[#D4AF37]/50 group-hover:text-[#D4AF37] transition-colors" />
           </div>
-          <p className={`text-2xl font-serif pt-2 ${typefullyOn ? 'text-emerald-400' : 'text-zinc-500'}`}>
-            {health === null ? '…' : typefullyOn ? 'Connected' : 'Not connected'}
+          <p className={`text-2xl font-serif pt-2 ${dispatchCount ? 'text-emerald-400' : 'text-zinc-500'}`}>
+            {health === null ? '…' : dispatchCount ? `${dispatchCount} of 2 connected` : 'Not connected'}
           </p>
           <p className="text-[10px] text-zinc-400 font-mono pt-1">
-            {typefullyOn ? 'Dispatches land in your drafts queue' : 'Add TYPEFULLY_API_KEY to .env'}
+            {health === null
+              ? '…'
+              : `Typefully ${typefullyOn ? 'on' : 'off'} · Buffer ${bufferOn ? 'on' : 'off'}${dispatchCount < 2 ? ' — keys go in .env' : ''}`}
           </p>
         </motion.div>
       </div>

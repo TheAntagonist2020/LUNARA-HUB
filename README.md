@@ -11,7 +11,8 @@ already pay for.
 | The app itself | Runs on your machine (Node or Bun) | **$0** |
 | AI copy generation | Your existing **Claude subscription** via the Claude Code CLI, or the **Gemini free tier**, or built-in offline templates | **$0** |
 | Film journal sync | **lunarafilm.com** public REST API — included in your WordPress.com plan | **$0** |
-| Social dispatch | **Typefully** drafts API — included with your Typefully account | **$0** |
+| Social dispatch | **Typefully** API v2 — included with your Typefully account; **Buffer** GraphQL API — works on Buffer's Free plan | **$0** |
+| Newsreel (movie news wire) | Public trade RSS feeds, official studio YouTube feeds, and a free **TMDB** key for official key art | **$0** |
 
 No cloud hosting, no pay-per-token API bills, no new subscriptions.
 
@@ -33,8 +34,43 @@ commented-out keys or formatting mistakes. Hand-copying `.env.example` still
 works if you prefer.)
 
 That's it — the app is fully functional with **zero keys configured**: AI
-features fall back to deterministic offline templates. Add the integrations
-below as you want them.
+features fall back to deterministic offline templates, and the Newsreel runs
+on public feeds. Add the integrations below as you want them.
+
+## The Newsreel — swipeable movie news
+
+The hub opens on the **Newsreel**: a mobile-first deck of movie news cards,
+dark and full-bleed, one story at a time.
+
+- **Swipe right — "Print it"**: the story goes to your **Shortlist** for the
+  social desk. **Swipe left — "Cut"**: pass. **Tap** a card for the full story,
+  the trailer, and the take. Undo brings back the last swipe. On a keyboard:
+  `→` print, `←` cut, `↑`/`Enter` open, `Z` undo, `T` take.
+- **Sources (all free):** the trade feeds Lunara Dispatch watches (Deadline,
+  Variety, IndieWire, World of Reel, EW, The Film Stage, The Playlist, Screen
+  Daily) plus THR, and the **official YouTube channels** of 17 studios and
+  distributors for trailer drops. Filter by Trailers, Casting, Box Office,
+  Awards & Fests, Streaming, Reviews. The "N outlets" badge is a real count of
+  outlets on the wire covering the same film.
+- **Imagery and trailers:** studio trailer cards use the trailer's own still.
+  With a free `TMDB_API_KEY`, news stories get the film's **official key art**
+  and **official trailer** (verified against the YouTube channel name), and
+  the detail sheet shows the poster, release date, and synopsis. The
+  Lunara Database Engine's TMDB key works here too.
+- **Hot takes:** the take runs through the same Claude CLI → Gemini →
+  offline-template chain as the Copilot Studio, at three heat levels (Mild,
+  Hot, Scorching). It's built only from the outlet's reported facts: no
+  invented dates, numbers, or quotes. Offline templates are labeled as templates.
+- **Dispatch:** each take becomes an editable post (X and Bluesky character
+  counts, `via Outlet` credit, link) that you can send to **Typefully** (draft or
+  next free slot) or **Buffer** (queue, share next, or draft).
+- **Official art only:** photos from an outlet's feed are display-only. Only
+  TMDB key art or an official trailer still can ride along on a social post,
+  and it gets a media-vault backup like every other asset that ships.
+
+The Newsreel only reads. It never writes site drafts: Lunara Dispatch stays the
+sole site intake (see the playbook). Swap sources with `NEWS_FEEDS` /
+`NEWS_TRAILER_CHANNELS` in `.env`.
 
 ## AI providers (pick any, or none)
 
@@ -102,9 +138,24 @@ Proton Drive) in `.env` and the vault backs itself up off-device too.
 
 ## Typefully dispatch (your existing Typefully account)
 
-Get an API key from **Typefully → Settings → Integrations → API** and set
-`TYPEFULLY_API_KEY` in `.env`. The **⚡ Send to Typefully** buttons in the AI
-Copilot Studio then push generated copy straight into your Typefully drafts.
+Get an API key from **Typefully → Settings → API** and set
+`TYPEFULLY_API_KEY` in `.env`. The hub uses **Typefully API v2**. Typefully
+switched v1 off on 15 June 2026, and v1 keys don't work with v2, so if your
+key predates that, make a new one. Drafts go to the first social set on the
+account and to every platform connected in it; narrow that with
+`TYPEFULLY_SOCIAL_SET_ID` / `TYPEFULLY_PLATFORMS`. The Newsreel's dispatch
+panel and the **⚡ Typefully** buttons in the AI Copilot Studio push copy
+straight into your drafts (or the next free queue slot). `npm run doctor`
+makes a real v2 call, so a stale key shows up there instead of on your first post.
+
+## Buffer dispatch (Buffer's Free plan works)
+
+Create a personal key in **Buffer → Settings → API** and set `BUFFER_API_KEY`
+in `.env`. The Newsreel's dispatch panel lists your connected text channels
+(X, Threads, Bluesky, Mastodon, LinkedIn, Facebook) and sends to the queue,
+"share next", or drafts. It never publishes instantly. Pre-pick channels with
+`BUFFER_CHANNEL_IDS`. Instagram, TikTok, and YouTube need media-specific
+settings, so schedule those in Buffer itself.
 
 ## On your phone
 
@@ -140,7 +191,7 @@ Publishing doesn't require the hub at all — the site is the always-on part:
   can list drafts, write dispatches, and publish to lunarafilm.com directly
   (the site's MCP bridge works from anywhere).
 - **wp-admin** in the phone browser: review and publish Dispatch drafts.
-- **Typefully app**: the social queue.
+- **Typefully / Buffer apps**: the social queue.
 
 ## Scripts
 

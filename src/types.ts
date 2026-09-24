@@ -1,5 +1,60 @@
 export type PlatformType = 'twitter' | 'instagram' | 'letterboxd' | 'tiktok' | 'youtube' | 'threads';
 
+export type TabId = 'newsreel' | 'command' | 'planner' | 'journal' | 'analytics' | 'copilot';
+
+// ── Newsreel (the movie news wire — shapes mirror GET /api/news/feed) ──────
+
+export type NewsCategory = 'trailers' | 'casting' | 'boxoffice' | 'awards' | 'streaming' | 'reviews' | 'news';
+
+export interface NewsStory {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  sourceId: string;
+  kind: 'news' | 'trailers';
+  category: NewsCategory;
+  publishedAt: string | null;
+  summary: string;
+  author?: string;
+  // official = studio key art / official trailer still — the only art the hub
+  // attaches to social posts. Outlet photos are display-only.
+  image?: { url: string; credit: string; official: boolean };
+  film?: {
+    tmdbId: number;
+    title: string;
+    year?: string;
+    releaseDate?: string;
+    overview?: string;
+    poster?: string;
+    backdrop?: string;
+    studio?: string;
+    tmdbUrl: string;
+  };
+  trailer?: { youtubeId: string; url: string; name: string; credit: string };
+  coverage: number; // outlets on the current wire covering the same film
+}
+
+export interface WireSourceStatus {
+  id: string;
+  label: string;
+  kind: 'news' | 'trailers';
+  ok: boolean;
+  count: number;
+  error?: string;
+}
+
+export type Spice = 'mild' | 'hot' | 'scorching';
+
+export interface HotTake {
+  summary: string;
+  take: string;
+  post: string;
+  hashtags: string[];
+  provider: 'claude' | 'gemini' | 'template';
+  spice: Spice;
+}
+
 export type PostStatus = 'draft' | 'scheduled' | 'published' | 'queued';
 
 export interface EngagementStats {

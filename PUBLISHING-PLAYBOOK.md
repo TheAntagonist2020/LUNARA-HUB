@@ -65,7 +65,14 @@ Attention" outbound ping and the Trakt watched-movie review reminder.
 
 Roles: Dispatch = automated news drafts · Claude = breaking news, reviews,
 and media on demand (this playbook) · Hub = the cockpit (real state, social
-copy, Typefully, featured images).
+copy, Typefully/Buffer, featured images).
+
+The hub's **Newsreel** reads the same trade feeds (plus official studio
+YouTube channels) for a swipeable reading deck and social takes. It is
+read-only: it never creates site drafts and is not a second intake. A story
+worth a journal post still goes through Dispatch or Claude. Outlet feed
+photos are display-only there; only official art (TMDB key art, official
+trailer stills) is attached to social posts, with a vault backup.
 
 Standing security notes: the Foundation bridge's `ifttt_operator` token was
 scheduled for rotation (unknown daily ~7:30 AM caller); the `chatgpt_editor`
@@ -79,5 +86,8 @@ discretion.
 - `GET /api/wordpress/journal` — pulls published posts into the Journal tab.
 - `GET /api/wordpress/drafts` — drafts awaiting review (Dispatch + Claude
   output), shown on the dashboard. Needs the same WP credentials.
-- `POST /api/typefully/draft` — copy → Typefully drafts/queue.
+- `POST /api/typefully/draft` — copy → Typefully drafts/queue (API v2).
+- `POST /api/buffer/post` — copy → Buffer queue / share next / drafts.
+- `GET /api/news/feed`, `POST /api/news/take` — the Newsreel wire and its
+  hot takes (read-only; no site writes).
 - `GET /api/health` — reports which of the above are armed.

@@ -39,9 +39,12 @@ if (fs.existsSync(".env")) {
 const wpSite = await ask("WordPress site", "lunarafilm.com");
 const wpUser = await ask("WordPress username", "lunarafilm");
 const wpPass = await ask("WordPress Application Password (spaces included)");
-const typefully = await ask("Typefully API key");
+const typefully = await ask("Typefully API key (v2 — Typefully → Settings → API)");
 const gemini = await ask("Gemini API key (optional)");
 const vaultDir = await ask("Media vault folder", "./media-vault");
+// Newer prompts go last so piped answer files from older versions still line up.
+const buffer = await ask("Buffer API key (optional — Buffer → Settings → API)");
+const tmdb = await ask("TMDB API key (optional — official key art + trailers for the Newsreel)");
 if (rl) rl.close();
 
 const envFile = [
@@ -51,6 +54,8 @@ const envFile = [
   `WP_USERNAME=${wpUser}`,
   `WP_APP_PASSWORD=${wpPass}`,
   `TYPEFULLY_API_KEY=${typefully}`,
+  `BUFFER_API_KEY=${buffer}`,
+  `TMDB_API_KEY=${tmdb}`,
   `GEMINI_API_KEY=${gemini}`,
   `MEDIA_VAULT_DIR=${vaultDir}`,
   "PORT=3000",
@@ -63,6 +68,8 @@ const set = (v) => (v ? "set" : "not set");
 console.log("\n.env written. Summary (values hidden):");
 console.log(`  WordPress write  ${set(wpPass)} (${wpUser}@${wpSite})`);
 console.log(`  Typefully        ${set(typefully)}`);
+console.log(`  Buffer           ${set(buffer)}`);
+console.log(`  TMDB (Newsreel)  ${set(tmdb)}`);
 console.log(`  Gemini fallback  ${set(gemini)}`);
 console.log(`  Media vault      ${vaultDir}`);
 console.log("\nNext: npm run doctor   (then npm start)");

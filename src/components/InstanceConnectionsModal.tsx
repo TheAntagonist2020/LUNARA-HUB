@@ -332,10 +332,10 @@ add_action('rest_api_init', function () {
             <div className="p-4 bg-[#050505] border border-zinc-800 rounded space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-mono text-xs text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                  Typefully v1 Drafts API Credentials
+                  Typefully API v2
                 </h4>
                 <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800">
-                  ENDPOINT: api.typefully.com/v1/drafts/
+                  ENDPOINT: api.typefully.com/v2
                 </span>
               </div>
 
@@ -354,16 +354,19 @@ add_action('rest_api_init', function () {
                   <button
                     onClick={async () => {
                       setTypefullyTestStatus('testing');
-                      setTypefullyTestResult('Checking the hub server for a configured Typefully key...');
+                      setTypefullyTestResult('Asking Typefully which social set and platforms this key can post to...');
                       try {
-                        const res = await fetch('/api/health');
-                        const health = await res.json();
-                        const armed = Boolean(health?.integrations?.typefullyKey);
+                        // A real call to Typefully's v2 API through the hub — the key stays server-side.
+                        const res = await fetch('/api/typefully/status');
+                        const data = await res.json();
+                        const armed = res.ok && !data.error;
                         setTypefullyTestStatus(armed ? 'success' : 'error');
                         setTypefullyTestResult(
                           armed
-                            ? 'TYPEFULLY_API_KEY is configured in .env — dispatch buttons in Copilot Studio and the Planner are live. The key itself is verified on your first real dispatch.'
-                            : 'No TYPEFULLY_API_KEY in the hub .env. Add it (Typefully → Settings → Integrations → API), restart the hub, and test again.'
+                            ? `Connected to "${data.label}" (social set ${data.socialSetId}). Drafts go to: ${data.platforms.join(', ')}. Newsreel, Copilot Studio and the Planner dispatch buttons are live.`
+                            : res.status === 503
+                              ? 'No TYPEFULLY_API_KEY in the hub .env. Add it (Typefully → Settings → API), restart the hub, and test again.'
+                              : data.error
                         );
                       } catch (err: any) {
                         setTypefullyTestStatus('error');
