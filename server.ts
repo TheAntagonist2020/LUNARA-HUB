@@ -393,6 +393,9 @@ app.get("/api/health", async (_req, res) => {
       tmdbKey: Boolean(process.env.TMDB_API_KEY),
       wordpressSite: process.env.WP_SITE || "lunarafilm.com",
       wordpressWrite: Boolean(process.env.WP_USERNAME && process.env.WP_APP_PASSWORD),
+      // The pitch inbox rides the same Application Password; whether the site
+      // runs Dispatch 3.3.0+ is only known once /api/dispatch/pitches answers.
+      pitchInbox: Boolean(process.env.WP_USERNAME && process.env.WP_APP_PASSWORD),
     },
     newsreel: {
       newsFeeds: sources.filter((s) => s.kind === "news").length,
@@ -584,6 +587,94 @@ app.get("/api/wordpress/drafts", async (_req, res) => {
   } catch (error: any) {
     console.error("Drafts listing error:", error);
     res.status(502).json({ error: error.message || `Failed to list drafts from ${WP_SITE}.` });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Pitch inbox — the Lunara Dispatch pitch gate (Dispatch 3.3.0+). With pitch
+// mode on, Dispatch files the stories it finds as pitches instead of writing
+// drafts; Dalton picks Write it / Pass here and only approved pitches become
+// site drafts. The hub just relays to the plugin's REST routes with the same
+// Application Password as the drafts panel — the pitch store lives on the site.
+// ---------------------------------------------------------------------------
+
+async function dispatchPitchApi(route: string, init: { method?: string; body?: unknown } = {}) {
+  const user = process.env.WP_USERNAME;
+  const appPassword = process.env.WP_APP_PASSWORD;
+  if (!user || !appPassword) {
+    throw new HttpError(
+      503,
+      "WP_USERNAME / WP_APP_PASSWORD not set — pitches live on the site behind your login, so the inbox needs the Application Password in .env."
+    );
+  }
+  const r = await fetch(`https://${WP_SITE}/wp-json/lunara/v1/dispatch/${route}`, {
+    method: init.method || "GET",
+    headers: {
+      Authorization: "Basic " + Buffer.from(`${user}:${appPassword}`).toString("base64"),
+      Accept: "application/json",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: init.body ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(20000),
+  });
+  const data: any = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 404 && data?.code === "rest_no_route") {
+      throw new HttpError(
+        501,
+        `${WP_SITE} doesn't have the pitch gate yet — update the Lunara Dispatch plugin to 3.3.0 or later.`
+      );
+    }
+    if (r.status === 401 || r.status === 403) {
+      throw new HttpError(r.status, `${WP_SITE} refused the Application Password for pitches (needs an editor or admin account).`);
+    }
+    throw new HttpError(502, data?.message || `${WP_SITE} answered HTTP ${r.status} for pitches.`);
+  }
+  return data;
+}
+
+const pitchError = (res: express.Response, error: any) =>
+  res.status(error instanceof HttpError ? error.status : 502).json({ error: error.message || "Pitch inbox unavailable." });
+
+app.get("/api/dispatch/pitches", async (_req, res) => {
+  try {
+    const data = await dispatchPitchApi("pitches");
+    const pitches = (Array.isArray(data.pitches) ? data.pitches : []).map((p: any) => ({
+      ...p,
+      postEditUrls: (Array.isArray(p.post_ids) ? p.post_ids : []).map(
+        (id: number) => `https://${WP_SITE}/wp-admin/post.php?post=${Number(id)}&action=edit&classic-editor`
+      ),
+    }));
+    res.json({ success: true, pitchMode: Boolean(data.pitch_mode), counts: data.counts || {}, pitches });
+  } catch (error: any) {
+    pitchError(res, error);
+  }
+});
+
+app.post("/api/dispatch/pitches/decide", async (req, res) => {
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 50) : []);
+  const write = ids(req.body?.write);
+  const pass = ids(req.body?.pass);
+  if (!write.length && !pass.length) return res.status(400).json({ error: "Pick at least one pitch to write or pass." });
+  const angles: Record<string, string> = {};
+  for (const id of write) {
+    const note = req.body?.angles?.[id];
+    if (typeof note === "string" && note.trim()) angles[id] = note.trim().slice(0, 600);
+  }
+  try {
+    const data = await dispatchPitchApi("pitches/decide", { method: "POST", body: { write, pass, angles } });
+    res.json({ success: true, approved: data.approved || 0, passed: data.passed || 0, writer: data.writer || null });
+  } catch (error: any) {
+    pitchError(res, error);
+  }
+});
+
+app.post("/api/dispatch/pitch-mode", async (req, res) => {
+  try {
+    const data = await dispatchPitchApi("pitches/mode", { method: "POST", body: { enabled: Boolean(req.body?.enabled) } });
+    res.json({ success: true, pitchMode: Boolean(data.pitch_mode) });
+  } catch (error: any) {
+    pitchError(res, error);
   }
 });
 

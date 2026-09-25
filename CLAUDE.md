@@ -51,6 +51,12 @@ modal all read. Keep any new integration reporting there.
   (Lunara Dispatch + Claude output; feeds the dashboard's Awaiting Review
   panel). Site news intake is the Dispatch plugin alone — see the playbook's
   Automation architecture section
+- `GET /api/dispatch/pitches`, `POST /api/dispatch/pitches/decide`,
+  `POST /api/dispatch/pitch-mode` — the Pitches inbox (dashboard): relays to
+  Lunara Dispatch 3.3.0's pitch gate (`lunara/v1/dispatch/pitches*`, same
+  Application Password). With pitch mode on, Dispatch files pitches instead
+  of drafts; only the ones Dalton approves (with his optional angle) get
+  written. The store lives on the site; the hub keeps no pitch state
 - `POST /api/wordpress/featured-image` — image URL → media-vault backup →
   WP media library → featured image (supports `postType` for CPTs)
 - `POST /api/typefully/draft` — content (+ optional official `imageUrl`) →
