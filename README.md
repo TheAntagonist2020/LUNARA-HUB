@@ -119,6 +119,17 @@ published posts (`review`, `journal`, and standard posts) through the public
 WordPress.com REST API into the journal — no credentials needed for published
 content. Change the source with `WP_SITE` / `WP_POST_TYPES` in `.env`.
 
+## Pitches — you decide what Dispatch writes
+
+The dashboard's **Pitches** panel is the approval inbox for the Lunara
+Dispatch plugin (3.3.0 or later on the site). Flip **Pitch mode** on once:
+from then on each Dispatch run sends its finds here instead of writing
+drafts. Tap **Write it** (add your angle if you have one) or **Pass**, then
+**Send calls**. Approved pitches are written as normal site drafts within a
+few minutes and show up under Awaiting Review; passed ones never are. Works
+the same on your phone. Needs `WP_USERNAME` + `WP_APP_PASSWORD` (an editor or
+admin account), the same as the drafts panel.
+
 ## Featured images & the media vault
 
 `POST /api/wordpress/featured-image` with `{ "postId": 123, "postType": "journal", "imageUrl": "https://...jpg", "alt": "..." }` makes the hub:

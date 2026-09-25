@@ -58,6 +58,16 @@ settings — nothing else.
 Flow: **Dispatch → draft + featured image → "Needs Attention" IFTTT phone
 ping → review (hub's Awaiting Review panel or wp-admin) → publish.**
 
+**Pitch gate (Dispatch 3.3.0+, decided 2026-09).** With pitch mode on (the
+toggle on the hub's Pitches panel), a Dispatch run writes nothing: it files
+what it found as pitches (headline, source, summary, link). Dalton picks
+**Write it** (optionally with his angle) or **Pass** in the hub, and only
+approved pitches are written, through the same draft-only pipeline, into
+Awaiting Review. Flow with the gate: **Dispatch → pitches → Dalton's call in
+the hub → draft + featured image → review → publish.** The pitch store lives
+in the plugin (option `lunara_dispatch_pitches`); the hub only relays. Pitch
+mode off = the classic flow above, untouched.
+
 Explicit decision: **no Feedly → IFTTT → capture inbound layer.** It was
 designed, then rejected as over-complication before being built. Do not
 resurrect it. IFTTT keeps exactly two Lunara jobs: the "Lunara — Needs
@@ -86,6 +96,10 @@ discretion.
 - `GET /api/wordpress/journal` — pulls published posts into the Journal tab.
 - `GET /api/wordpress/drafts` — drafts awaiting review (Dispatch + Claude
   output), shown on the dashboard. Needs the same WP credentials.
+- `GET /api/dispatch/pitches`, `POST /api/dispatch/pitches/decide`,
+  `POST /api/dispatch/pitch-mode` — the Pitches inbox, relayed to the
+  plugin's `lunara/v1/dispatch/pitches*` routes. Same WP credentials; the
+  account needs editor rights. Deciding never publishes.
 - `POST /api/typefully/draft` — copy → Typefully drafts/queue (API v2).
 - `POST /api/buffer/post` — copy → Buffer queue / share next / drafts.
 - `GET /api/news/feed`, `POST /api/news/take` — the Newsreel wire and its

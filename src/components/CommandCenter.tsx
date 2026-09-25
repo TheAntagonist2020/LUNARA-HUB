@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { FilmJournalEntry, SocialPost, PlatformMetric, LiveActivity } from '../types';
 import { PlatformIcon, getPlatformBg } from './PlatformIcon';
+import { PitchInbox } from './PitchInbox';
 import { Eye, TrendingUp, MousePointerClick, Calendar, Radio, ArrowUpRight, Sparkles, CheckCircle2, Clock, Send, Star, ExternalLink, RefreshCw, BookOpen, Cpu, Zap, Inbox } from 'lucide-react';
 
 // Shared cinematic panel treatment: soft vertical gradient, gold hairline
@@ -180,6 +181,9 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
           </p>
         </motion.div>
       </div>
+
+      {/* Pitches — Dispatch's finds, waiting on Dalton's call before anything is written */}
+      <PitchInbox panelClass={panelClass} hairline={<Hairline />} delay={0.28} />
 
       {/* Awaiting Review — drafts produced by Lunara Dispatch and Claude */}
       <motion.div {...rise(0.32)} className={`${panelClass} p-6 space-y-4`}>
