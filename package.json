@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "doctor": "node scripts/doctor.mjs",
+    "phone": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phone-setup.ps1",
     "setup": "node scripts/setup.mjs",
     "update": "node scripts/update.mjs",
     "vault:backfill": "node scripts/vault-backfill.mjs",
