@@ -40,7 +40,12 @@ via `AI_PROVIDER`; auto-detects otherwise.
 
 `GET /api/health` reports which integrations are armed — it is the single
 source of truth the dashboard tiles, Copilot Studio banner, and connections
-modal all read. Keep any new integration reporting there.
+modal all read. Keep any new integration reporting there. `geminiKey` is true
+only when Google accepts the key (checked every 10 min, key sent in a header);
+a rejected key reports false plus `geminiKeyProblem`, and the provider chain
+skips Gemini so calls don't wait on a 400. `npm run doctor` prints all of this
+plus the phone address and, on Windows, whether the firewall profile lets the
+phone in.
 
 ## Server endpoints (server.ts)
 
@@ -56,7 +61,13 @@ modal all read. Keep any new integration reporting there.
   Lunara Dispatch 3.3.0's pitch gate (`lunara/v1/dispatch/pitches*`, same
   Application Password). With pitch mode on, Dispatch files pitches instead
   of drafts; only the ones Dalton approves (with his optional angle) get
-  written. The store lives on the site; the hub keeps no pitch state
+  written. The store lives on the site; the hub keeps no pitch state.
+  `POST /api/dispatch/pitches/rank` scores one batch of up to 50 pending
+  pitches (newest first) against `voice/newsreel-voice.md` via the provider
+  chain and returns `{ranked, remaining}`; the inbox loops until nothing is
+  unranked. Scores are a derived cache in `.cache/pitch-ranks.json`
+  (gitignored), pruned to the ids the site still lists; `GET …/pitches`
+  attaches them as `rank`
 - `POST /api/wordpress/featured-image` — image URL → media-vault backup →
   WP media library → featured image (supports `postType` for CPTs)
 - `POST /api/typefully/draft` — content (+ optional official `imageUrl`) →

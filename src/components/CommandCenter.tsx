@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { FilmJournalEntry, SocialPost, PlatformMetric, LiveActivity } from '../types';
+import { FilmJournalEntry, SocialPost, LiveActivity } from '../types';
 import { PlatformIcon, getPlatformBg } from './PlatformIcon';
 import { PitchInbox } from './PitchInbox';
 import { Eye, TrendingUp, MousePointerClick, Calendar, Radio, ArrowUpRight, Sparkles, CheckCircle2, Clock, Send, Star, ExternalLink, RefreshCw, BookOpen, Cpu, Zap, Inbox } from 'lucide-react';
@@ -24,7 +24,6 @@ const rise = (delay: number) => ({
 interface CommandCenterProps {
   posts: SocialPost[];
   journalEntries: FilmJournalEntry[];
-  platformMetrics: PlatformMetric[];
   liveActivities: LiveActivity[];
   onOpenNewPost: () => void;
   onOpenNewJournal: () => void;
@@ -39,7 +38,6 @@ interface CommandCenterProps {
 export const CommandCenter: React.FC<CommandCenterProps> = ({
   posts,
   journalEntries,
-  platformMetrics,
   liveActivities,
   onOpenNewPost,
   onOpenNewJournal,
@@ -417,11 +415,17 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({
               className="bg-[#050505] rounded-xl overflow-hidden border border-zinc-800 hover:border-[#D4AF37]/70 hover:shadow-[0_8px_32px_rgba(212,175,55,0.08)] hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group"
             >
               <div className="relative h-48 overflow-hidden">
-                <img
-                  src={entry.posterUrl}
-                  alt={entry.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
-                />
+                {entry.posterUrl ? (
+                  <img
+                    src={entry.posterUrl}
+                    alt={entry.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-[#0a0a0a] flex items-center justify-center">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600">No key art yet</span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/30 to-transparent" />
                 <div className="absolute top-3 right-3 bg-black/80 px-2 py-0.5 rounded border border-[#D4AF37]/40 text-xs text-[#D4AF37] font-bold flex items-center gap-1 font-mono">
                   <Star className="w-3 h-3 fill-[#D4AF37] text-[#D4AF37]" /> {entry.rating}

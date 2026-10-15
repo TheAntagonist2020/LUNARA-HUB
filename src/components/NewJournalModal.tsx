@@ -19,7 +19,7 @@ export const NewJournalModal: React.FC<NewJournalModalProps> = ({
   const [title, setTitle] = useState(entryToEdit?.title || '');
   const [director, setDirector] = useState(entryToEdit?.director || '');
   const [year, setYear] = useState<number>(entryToEdit?.year || new Date().getFullYear());
-  const [posterUrl, setPosterUrl] = useState(entryToEdit?.posterUrl || 'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=800&auto=format&fit=crop');
+  const [posterUrl, setPosterUrl] = useState(entryToEdit?.posterUrl || '');
   const [rating, setRating] = useState<number>(entryToEdit?.rating || 4.5);
   const [reviewText, setReviewText] = useState(entryToEdit?.reviewText || '');
   const [favoriteQuote, setFavoriteQuote] = useState(entryToEdit?.favoriteQuote || '');

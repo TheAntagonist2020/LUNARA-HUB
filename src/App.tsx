@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { SocialPost, FilmJournalEntry, PlatformMetric, LiveActivity, PostStatus, TabId } from './types';
-import { INITIAL_FILM_JOURNAL, INITIAL_SOCIAL_POSTS, INITIAL_PLATFORM_METRICS, INITIAL_LIVE_ACTIVITIES } from './data/mockInitialData';
+import { SocialPost, FilmJournalEntry, LiveActivity, PostStatus, TabId } from './types';
+import { INITIAL_FILM_JOURNAL, INITIAL_SOCIAL_POSTS, INITIAL_LIVE_ACTIVITIES } from './data/mockInitialData';
 import { Header } from './components/Header';
 import { CommandCenter } from './components/CommandCenter';
 import { SocialPlanner } from './components/SocialPlanner';
@@ -43,8 +43,6 @@ export default function App() {
     const saved = localStorage.getItem('lunara_journal');
     return saved ? JSON.parse(saved) : INITIAL_FILM_JOURNAL;
   });
-
-  const [platformMetrics, setPlatformMetrics] = useState<PlatformMetric[]>(INITIAL_PLATFORM_METRICS);
 
   const [liveActivities, setLiveActivities] = useState<LiveActivity[]>(() => {
     const saved = localStorage.getItem('lunara_activities');
@@ -188,7 +186,7 @@ export default function App() {
         title: entryData.title || 'Untitled Movie',
         director: entryData.director || 'Unknown',
         year: entryData.year || new Date().getFullYear(),
-        posterUrl: entryData.posterUrl || 'https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=800&auto=format&fit=crop',
+        posterUrl: entryData.posterUrl || '',
         rating: entryData.rating || 4.5,
         reviewText: entryData.reviewText || '',
         favoriteQuote: entryData.favoriteQuote,
@@ -279,7 +277,6 @@ export default function App() {
           <CommandCenter
             posts={posts}
             journalEntries={journalEntries}
-            platformMetrics={platformMetrics}
             liveActivities={liveActivities}
             onOpenNewPost={() => {
               setPostToEdit(null);
@@ -337,7 +334,7 @@ export default function App() {
         {activeTab === 'analytics' && (
           <AnalyticsDashboard
             posts={posts}
-            platformMetrics={platformMetrics}
+            journalEntries={journalEntries}
           />
         )}
 

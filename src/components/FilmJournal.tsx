@@ -191,11 +191,17 @@ export const FilmJournal: React.FC<FilmJournalProps> = ({
             >
               {/* Poster Header */}
               <div className="relative h-64 overflow-hidden">
-                <img
-                  src={entry.posterUrl}
-                  alt={entry.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90"
-                />
+                {entry.posterUrl ? (
+                  <img
+                    src={entry.posterUrl}
+                    alt={entry.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-90"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-[#050505] flex items-center justify-center">
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600">No key art yet</span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent" />
 
                 {/* Section Badge */}

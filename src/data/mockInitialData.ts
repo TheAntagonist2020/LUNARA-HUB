@@ -1,4 +1,4 @@
-import { FilmJournalEntry, SocialPost, PlatformMetric, LiveActivity } from '../types';
+import { FilmJournalEntry, SocialPost, LiveActivity } from '../types';
 
 export const INITIAL_FILM_JOURNAL: FilmJournalEntry[] = [
   {
@@ -255,64 +255,6 @@ export const INITIAL_SOCIAL_POSTS: SocialPost[] = [
       reach: 0
     },
     hashtags: ['#Cinematography', '#FilmTwitter', '#LunaraFilm', '#MovieList']
-  }
-];
-
-export const INITIAL_PLATFORM_METRICS: PlatformMetric[] = [
-  {
-    platform: 'twitter',
-    name: 'X / Twitter',
-    handle: '@LunaraFilm',
-    followers: 48920,
-    followersGrowth24h: 312,
-    reach24h: 245000,
-    engagementRate: 7.8,
-    activeQueueCount: 3,
-    color: '#38bdf8'
-  },
-  {
-    platform: 'letterboxd',
-    name: 'Letterboxd HQ',
-    handle: 'lunarafilm',
-    followers: 32400,
-    followersGrowth24h: 189,
-    reach24h: 89000,
-    engagementRate: 11.2,
-    activeQueueCount: 2,
-    color: '#00e054'
-  },
-  {
-    platform: 'instagram',
-    name: 'Instagram',
-    handle: '@lunarafilmjournal',
-    followers: 71800,
-    followersGrowth24h: 540,
-    reach24h: 310000,
-    engagementRate: 6.4,
-    activeQueueCount: 4,
-    color: '#e1306c'
-  },
-  {
-    platform: 'tiktok',
-    name: 'TikTok FilmTok',
-    handle: '@lunarafilmofficial',
-    followers: 112500,
-    followersGrowth24h: 1250,
-    reach24h: 580000,
-    engagementRate: 9.1,
-    activeQueueCount: 2,
-    color: '#25f4ee'
-  },
-  {
-    platform: 'threads',
-    name: 'Threads',
-    handle: '@lunarafilmjournal',
-    followers: 19400,
-    followersGrowth24h: 95,
-    reach24h: 42000,
-    engagementRate: 5.2,
-    activeQueueCount: 1,
-    color: '#a855f7'
   }
 ];
 
