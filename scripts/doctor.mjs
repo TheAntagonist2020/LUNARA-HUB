@@ -119,7 +119,7 @@ function phoneLines(port) {
   const out = [];
   const lan = Object.values(os.networkInterfaces())
     .flat()
-    .filter((a) => a && a.family === "IPv4" && !a.internal && !a.address.startsWith("172."))
+    .filter((a) => a && a.family === "IPv4" && !a.internal && !a.address.startsWith("172.") && !a.address.startsWith("169.254."))
     .map((a) => a.address);
   out.push(
     `${flag(lan.length > 0)} Phone (same Wi-Fi): ${lan.length ? lan.map((ip) => `http://${ip}:${port}`).join("  or  ") : "no LAN address found"}`
@@ -133,13 +133,15 @@ function phoneLines(port) {
         windowsHide: true,
       }).trim();
     const category = ps("(Get-NetConnectionProfile | Select-Object -First 1 -ExpandProperty NetworkCategory)") || "Private";
-    // Rules that name node.exe, plus (when the shell is allowed to read port
-    // filters) rules that open the hub's port.
+    // Rules that name node.exe, the "LUNARA Hub" rule npm run phone adds
+    // (readable by name without elevation), plus (when the shell is allowed
+    // to read port filters) any other rule that opens the hub's port.
     const profiles = ps(
       "$ok = @(); " +
         "$byApp = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object { $_.Program -match 'node' } | Get-NetFirewallRule -ErrorAction SilentlyContinue; " +
+        "$byName = Get-NetFirewallRule -DisplayName 'LUNARA Hub' -ErrorAction SilentlyContinue; " +
         `$byPort = Get-NetFirewallPortFilter -ErrorAction SilentlyContinue 2>$null | Where-Object { $_.LocalPort -eq ${port} } | Get-NetFirewallRule -ErrorAction SilentlyContinue; ` +
-        "foreach ($r in @($byApp) + @($byPort)) { if ($r -and $r.Enabled -eq 'True' -and $r.Direction -eq 'Inbound' -and $r.Action -eq 'Allow') { $ok += [string]$r.Profile } }; " +
+        "foreach ($r in @($byApp) + @($byName) + @($byPort)) { if ($r -and $r.Enabled -eq 'True' -and $r.Direction -eq 'Inbound' -and $r.Action -eq 'Allow') { $ok += [string]$r.Profile } }; " +
         "($ok | Sort-Object -Unique) -join ','"
     );
     const covered = profiles.split(/[,\s]+/).some((p) => p === "Any" || p.toLowerCase() === String(category).toLowerCase());

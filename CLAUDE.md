@@ -45,7 +45,9 @@ only when Google accepts the key (checked every 10 min, key sent in a header);
 a rejected key reports false plus `geminiKeyProblem`, and the provider chain
 skips Gemini so calls don't wait on a 400. `npm run doctor` prints all of this
 plus the phone address and, on Windows, whether the firewall profile lets the
-phone in.
+phone in. `npm run phone` (scripts/phone-setup.ps1) is the one-time Windows
+fix: elevates once, adds the "LUNARA Hub" TCP 3000 rule on Private/Domain,
+installs Tailscale via winget if missing, prints the phone address.
 
 ## Server endpoints (server.ts)
 

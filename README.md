@@ -191,8 +191,16 @@ and runs full-screen like a native app. Three tiers, all $0:
 2. Open that address in your phone's browser. If it never loads, run
    `npm run doctor`: it prints the address and checks the Windows firewall.
    The usual trap is that Node's "Allow" prompt only opened the **Public**
-   profile while home Wi-Fi is **Private**. One-time fix, in PowerShell run as
-   Administrator:
+   profile while home Wi-Fi is **Private**. One-time fix on Windows:
+
+   ```
+   npm run phone
+   ```
+
+   It asks for Administrator once, adds a "LUNARA Hub" rule for TCP 3000 on
+   the Private and Domain profiles, installs Tailscale (next section) if it is
+   missing, and prints the address to open. Re-running is safe. The manual
+   equivalent, in PowerShell as Administrator:
 
    ```
    netsh advfirewall firewall add rule name="LUNARA Hub" dir=in action=allow protocol=TCP localport=3000 profile=private,domain
@@ -206,7 +214,8 @@ Same Wi-Fi only works at home. [Tailscale](https://tailscale.com) (free for
 personal use) gives your PC a private address that works from anywhere, with
 nothing exposed to the public internet:
 
-1. Install Tailscale on the PC and the phone, sign both into the same account.
+1. Install Tailscale on the PC (`npm run phone` does this on Windows) and on
+   the phone, then sign both into the same account.
 2. On the phone, open `http://<your-pc-name>:3000` (the name shown in the
    Tailscale app). Add to home screen the same way.
 
