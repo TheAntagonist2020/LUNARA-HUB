@@ -116,15 +116,51 @@ async function runClaudeCli(prompt: string): Promise<string> {
   return stdout;
 }
 
-// Model text may arrive fenced or with prose around it — carve out the JSON object.
-function extractJsonObject(text: string): any {
+// Every balanced {...} in the text that parses as JSON, in order. Models
+// sometimes echo the requested shape in prose before the real answer, or
+// split a long answer into two objects — this finds all of them.
+function extractJsonCandidates(text: string): any[] {
   const cleaned = text.replace(/```(?:json)?/gi, "");
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error("No JSON object found in model output");
+  const found: any[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      if (depth > 0) depth--;
+      if (depth === 0 && start !== -1) {
+        try {
+          found.push(JSON.parse(cleaned.slice(start, i + 1)));
+        } catch {
+          // an unbalanced or prose-wrapped brace run — skip it
+        }
+        start = -1;
+      }
+    }
   }
-  return JSON.parse(cleaned.slice(start, end + 1));
+  return found;
+}
+
+// Model text may arrive fenced or with prose around it — carve out the JSON
+// object. When several parse, the largest is the answer (the small ones are
+// echoed shapes or examples).
+function extractJsonObject(text: string): any {
+  const candidates = extractJsonCandidates(text);
+  if (!candidates.length) throw new Error("No JSON object found in model output");
+  return candidates.reduce((best, c) => (JSON.stringify(c).length > JSON.stringify(best).length ? c : best));
 }
 
 let gemini: GoogleGenAI | null = null;
@@ -144,6 +180,37 @@ function getGeminiAI() {
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
+// A key that is set but rejected by Google is worse than no key: every call
+// would wait on a 400 before falling through. Ask Google once every 10 min
+// (the key travels in a header, never a URL) and report the answer honestly.
+let geminiKeyState: { ok: boolean; checkedAt: number; message: string | null } | null = null;
+
+async function checkGeminiKey(): Promise<boolean> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return false;
+  if (geminiKeyState && Date.now() - geminiKeyState.checkedAt < 10 * 60 * 1000) return geminiKeyState.ok;
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", {
+      headers: { "x-goog-api-key": key, Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
+    });
+    let message: string | null = null;
+    if (!r.ok) {
+      const d: any = await r.json().catch(() => ({}));
+      message = d?.error?.message || `Google answered HTTP ${r.status}`;
+    }
+    if (!r.ok && geminiKeyState?.ok !== false) {
+      console.warn(`[ai] Gemini key rejected: ${message} — fix GEMINI_API_KEY in .env (Google AI Studio → API keys)`);
+    }
+    geminiKeyState = { ok: r.ok, checkedAt: Date.now(), message };
+  } catch {
+    // Network blip, not a verdict on the key — keep the last answer, or assume
+    // fine, and ask again soon.
+    geminiKeyState = { ok: geminiKeyState?.ok ?? true, checkedAt: Date.now() - 9 * 60 * 1000, message: geminiKeyState?.message ?? null };
+  }
+  return geminiKeyState.ok;
+}
+
 async function resolveProviderOrder(): Promise<ProviderName[]> {
   const pref = (process.env.AI_PROVIDER || "auto").toLowerCase();
   if (pref === "claude") return ["claude", "template"];
@@ -151,7 +218,7 @@ async function resolveProviderOrder(): Promise<ProviderName[]> {
   if (pref === "template") return ["template"];
   const order: ProviderName[] = [];
   if (await checkClaudeCli()) order.push("claude");
-  if (process.env.GEMINI_API_KEY) order.push("gemini");
+  if (await checkGeminiKey()) order.push("gemini");
   order.push("template");
   return order;
 }
@@ -387,7 +454,10 @@ app.get("/api/health", async (_req, res) => {
     aiProviderOrder: order,
     integrations: {
       claudeCli: order.includes("claude"),
-      geminiKey: Boolean(process.env.GEMINI_API_KEY),
+      // true only when Google accepts the key; a rejected key reports false
+      // with the reason in geminiKeyProblem so the fix is obvious.
+      geminiKey: order.includes("gemini"),
+      geminiKeyProblem: process.env.GEMINI_API_KEY && !order.includes("gemini") ? geminiKeyState?.message || "key rejected" : null,
       typefullyKey: Boolean(process.env.TYPEFULLY_API_KEY),
       bufferKey: Boolean(process.env.BUFFER_API_KEY),
       tmdbKey: Boolean(process.env.TMDB_API_KEY),
@@ -486,9 +556,9 @@ function mapWpPostToJournalEntry(post: any, postType: string) {
     title: stripHtml(post.title?.rendered || "Untitled"),
     director: "",
     year: new Date(post.date || Date.now()).getFullYear(),
-    posterUrl:
-      featuredMedia ||
-      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=800&auto=format&fit=crop",
+    // No featured image means no poster — the UI shows an honest blank, never
+    // a stock photo standing in for key art.
+    posterUrl: featuredMedia || "",
     rating: 4.5,
     reviewText,
     tags: terms.length ? terms : ["lunarafilm.com"],
@@ -639,8 +709,11 @@ const pitchError = (res: express.Response, error: any) =>
 app.get("/api/dispatch/pitches", async (_req, res) => {
   try {
     const data = await dispatchPitchApi("pitches");
-    const pitches = (Array.isArray(data.pitches) ? data.pitches : []).map((p: any) => ({
+    const raw: any[] = Array.isArray(data.pitches) ? data.pitches : [];
+    prunePitchRanks(new Set(raw.map((p) => String(p.id))));
+    const pitches = raw.map((p: any) => ({
       ...p,
+      rank: pitchRanks[p.id] || null,
       postEditUrls: (Array.isArray(p.post_ids) ? p.post_ids : []).map(
         (id: number) => `https://${WP_SITE}/wp-admin/post.php?post=${Number(id)}&action=edit&classic-editor`
       ),
@@ -673,6 +746,195 @@ app.post("/api/dispatch/pitch-mode", async (req, res) => {
   try {
     const data = await dispatchPitchApi("pitches/mode", { method: "POST", body: { enabled: Boolean(req.body?.enabled) } });
     res.json({ success: true, pitchMode: Boolean(data.pitch_mode) });
+  } catch (error: any) {
+    pitchError(res, error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Pitch ranking — the model reads the pending pitches against Dalton's voice
+// file and scores how much each one is his kind of story, with a one-line
+// editor's reason. Scores are a derived cache (.cache/pitch-ranks.json,
+// gitignored); the pitch store itself stays on the site. One call scores one
+// batch; the inbox keeps calling until nothing is left unranked.
+// ---------------------------------------------------------------------------
+
+interface PitchRank {
+  score: number;
+  why: string;
+  rankedAt: string;
+  provider: ProviderName;
+}
+
+interface RankablePitch {
+  id: string;
+  title: string;
+  source: string;
+  summary: string;
+}
+
+const RANK_CACHE_FILE = path.join(process.cwd(), ".cache", "pitch-ranks.json");
+const RANK_BATCH = 50;
+let pitchRanks: Record<string, PitchRank> = {};
+try {
+  pitchRanks = JSON.parse(fs.readFileSync(RANK_CACHE_FILE, "utf8"));
+  if (!pitchRanks || typeof pitchRanks !== "object") pitchRanks = {};
+} catch {
+  pitchRanks = {};
+}
+
+function savePitchRanks() {
+  try {
+    fs.mkdirSync(path.dirname(RANK_CACHE_FILE), { recursive: true });
+    fs.writeFileSync(RANK_CACHE_FILE, JSON.stringify(pitchRanks));
+  } catch (err: any) {
+    console.warn(`[pitches] could not save ranks: ${err.message}`);
+  }
+}
+
+// Drop scores for pitches the site no longer lists, so the cache tracks the inbox.
+function prunePitchRanks(liveIds: Set<string>) {
+  let changed = false;
+  for (const id of Object.keys(pitchRanks)) {
+    if (!liveIds.has(id)) {
+      delete pitchRanks[id];
+      changed = true;
+    }
+  }
+  if (changed) savePitchRanks();
+}
+
+function rankPromptBody(pitches: RankablePitch[]): string {
+  return `You are the editor at lunarafilm.com, Dalton's film journal. Below is his voice guide, then a list of story pitches his news intake found. Score each pitch for how much Dalton would want to write a short dispatch about it on the site today.
+
+=== VOICE GUIDE ===
+${newsreelVoice()}
+=== END VOICE GUIDE ===
+
+Scoring, 0 to 100:
+- 85–100: a director, actor, or film he would have a real opinion about; a trailer or first look for a film worth a position; festival or awards news with a tell in it.
+- 60–84: a solid film story with an angle, if he has the time.
+- 30–59: film news without much to say; a press release with no tell.
+- 0–29: TV-only, listicles, box office roundups with no story, gossip, anything with nothing to argue about.
+
+For each pitch also give "why": the reason in plain words, max 14 words, the way an editor says it in a hallway. Never invent facts beyond the pitch text.
+
+Pitches:
+${pitches
+  .map((p, i) => `${i + 1}. id=${p.id} | ${p.source || "Unknown source"} | ${p.title}${p.summary ? ` — ${p.summary.slice(0, 220)}` : ""}`)
+  .join("\n")}`;
+}
+
+// Collect scores from every JSON object in the reply: a single {"ranks": [...]},
+// an answer split across two objects, or bare {id, score, why} entries.
+function ranksFromText(raw: string): Array<{ id: string; score: number; why: string }> {
+  const merged: any[] = [];
+  for (const c of extractJsonCandidates(raw)) {
+    if (Array.isArray(c?.ranks)) merged.push(...c.ranks);
+    else if (c && typeof c === "object" && typeof c.id === "string" && "score" in c) merged.push(c);
+  }
+  if (!merged.length) throw new Error("No ranks found in model output");
+  return cleanRanks({ ranks: merged });
+}
+
+function cleanRanks(data: any): Array<{ id: string; score: number; why: string }> {
+  const list = Array.isArray(data?.ranks) ? data.ranks : [];
+  return list
+    .map((r: any) => ({
+      id: String(r?.id || "").trim(),
+      score: Math.max(0, Math.min(100, Math.round(Number(r?.score) || 0))),
+      why: String(r?.why || "").trim().slice(0, 160),
+    }))
+    .filter((r: { id: string }) => r.id);
+}
+
+async function rankWithProvider(provider: "claude" | "gemini", pitches: RankablePitch[]) {
+  const prompt = rankPromptBody(pitches);
+  if (provider === "claude") {
+    const raw = await runClaudeCli(`${prompt}
+
+Respond with ONLY a valid JSON object — no markdown fences, no commentary — shaped exactly like:
+{"ranks": [{"id": string, "score": number, "why": string}]}
+with one entry for every pitch id listed above. Keep every "why" under 14 words so the whole object stays short.`);
+    return ranksFromText(raw);
+  }
+  const ai = getGeminiAI();
+  if (!ai) throw new Error("GEMINI_API_KEY not configured");
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          ranks: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                score: { type: Type.NUMBER },
+                why: { type: Type.STRING },
+              },
+              required: ["id", "score", "why"],
+            },
+          },
+        },
+        required: ["ranks"],
+      },
+    },
+  });
+  if (!response.text) throw new Error("No response generated from Gemini.");
+  return cleanRanks(JSON.parse(response.text));
+}
+
+const pitchStamp = (p: any) => String(p?.published_at || p?.created_at || "");
+
+app.post("/api/dispatch/pitches/rank", async (req, res) => {
+  try {
+    const data = await dispatchPitchApi("pitches");
+    const pending: any[] = (Array.isArray(data.pitches) ? data.pitches : []).filter((p: any) => p?.status === "pending");
+    const force = Boolean(req.body?.force);
+    // Newest first, so fresh stories get scored before the backlog.
+    const unranked = pending
+      .filter((p) => force || !pitchRanks[p.id])
+      .sort((a, b) => pitchStamp(b).localeCompare(pitchStamp(a)));
+    const batch = unranked.slice(0, RANK_BATCH);
+    if (!batch.length) return res.json({ success: true, ranked: 0, remaining: 0, provider: null });
+
+    const order = (await resolveProviderOrder()).filter((p): p is "claude" | "gemini" => p !== "template");
+    if (!order.length) {
+      throw new HttpError(503, "No model available to rank pitches — the Claude Code CLI or a GEMINI_API_KEY is needed.");
+    }
+
+    let lastError: Error | null = null;
+    let used: ProviderName | null = null;
+    let ranked = 0;
+    for (const provider of order) {
+      try {
+        const ranks = await rankWithProvider(
+          provider,
+          batch.map((p) => ({ id: String(p.id), title: stripHtml(p.title || ""), source: String(p.source || ""), summary: stripHtml(p.summary || "") }))
+        );
+        const ids = new Set(batch.map((p) => String(p.id)));
+        const now = new Date().toISOString();
+        for (const r of ranks) {
+          if (!ids.has(r.id)) continue;
+          pitchRanks[r.id] = { score: r.score, why: r.why, rankedAt: now, provider };
+          ranked++;
+        }
+        if (!ranked) throw new Error("Model returned no scores for the listed pitch ids");
+        used = provider;
+        break;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[pitches] ranking with "${provider}" failed: ${err.message} — trying next`);
+      }
+    }
+    if (!used) throw lastError || new Error("Ranking failed");
+    savePitchRanks();
+    res.json({ success: true, ranked, remaining: Math.max(0, unranked.length - batch.length), provider: used });
   } catch (error: any) {
     pitchError(res, error);
   }

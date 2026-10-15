@@ -2,6 +2,8 @@
 // connected. Run `npm run dev` in one terminal, then `npm run doctor` in
 // another. Reads .env key NAMES only; never prints secret values.
 import fs from "fs";
+import os from "os";
+import { execFileSync } from "child_process";
 
 const env = {};
 try {
@@ -68,6 +70,15 @@ try {
   } else {
     lines.push(`${flag(false)} Buffer off — optional; add BUFFER_API_KEY to .env and restart`);
   }
+  if (env.GEMINI_API_KEY) {
+    lines.push(
+      `${flag(i.geminiKey)} Gemini ${
+        i.geminiKey ? "key accepted — free-tier fallback ready" : `key REJECTED — ${i.geminiKeyProblem || "fix GEMINI_API_KEY in .env"}`
+      }`
+    );
+  } else {
+    lines.push(`${flag(false)} Gemini off — optional fallback; add GEMINI_API_KEY (Google AI Studio) to .env`);
+  }
   lines.push(
     `${flag(i.tmdbKey)} TMDB ${
       i.tmdbKey ? "on — Newsreel pulls official key art + trailers" : "off — optional; add TMDB_API_KEY for official key art"
@@ -90,10 +101,61 @@ try {
   );
   for (const s of down) lines.push(`       ${s.label.padEnd(22)} ${s.error}`);
   lines.push("");
-  lines.push("Every line [ OK ] above means the hub is fully connected (Buffer and TMDB are optional).");
+  lines.push(...phoneLines(port));
+  lines.push("");
+  lines.push("Every line [ OK ] above means the hub is fully connected (Buffer, TMDB and Gemini are optional).");
 } catch {
   lines.push(`${flag(false)} Hub server NOT reachable at ${base}`);
   lines.push("       Start it first:  npm run dev   (then run npm run doctor in a second terminal)");
 }
 
 console.log(lines.join("\n"));
+
+// Phone access: the LAN address the phone should open, and on Windows whether
+// the firewall lets Node answer on the network profile the PC is actually on.
+// Node's first-run "Allow" prompt usually adds a Public-only rule, and a home
+// Wi-Fi is normally Private — the hub then works on the PC and nowhere else.
+function phoneLines(port) {
+  const out = [];
+  const lan = Object.values(os.networkInterfaces())
+    .flat()
+    .filter((a) => a && a.family === "IPv4" && !a.internal && !a.address.startsWith("172."))
+    .map((a) => a.address);
+  out.push(
+    `${flag(lan.length > 0)} Phone (same Wi-Fi): ${lan.length ? lan.map((ip) => `http://${ip}:${port}`).join("  or  ") : "no LAN address found"}`
+  );
+  if (process.platform !== "win32") return out;
+  try {
+    const ps = (script) =>
+      execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+        encoding: "utf8",
+        timeout: 30000,
+        windowsHide: true,
+      }).trim();
+    const category = ps("(Get-NetConnectionProfile | Select-Object -First 1 -ExpandProperty NetworkCategory)") || "Private";
+    // Rules that name node.exe, plus (when the shell is allowed to read port
+    // filters) rules that open the hub's port.
+    const profiles = ps(
+      "$ok = @(); " +
+        "$byApp = Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object { $_.Program -match 'node' } | Get-NetFirewallRule -ErrorAction SilentlyContinue; " +
+        `$byPort = Get-NetFirewallPortFilter -ErrorAction SilentlyContinue 2>$null | Where-Object { $_.LocalPort -eq ${port} } | Get-NetFirewallRule -ErrorAction SilentlyContinue; ` +
+        "foreach ($r in @($byApp) + @($byPort)) { if ($r -and $r.Enabled -eq 'True' -and $r.Direction -eq 'Inbound' -and $r.Action -eq 'Allow') { $ok += [string]$r.Profile } }; " +
+        "($ok | Sort-Object -Unique) -join ','"
+    );
+    const covered = profiles.split(/[,\s]+/).some((p) => p === "Any" || p.toLowerCase() === String(category).toLowerCase());
+    out.push(
+      `${flag(covered)} Windows firewall: network is ${category}, Node allowed on ${profiles || "no profile"}${
+        covered ? "" : " — the phone can't reach the hub until that profile is allowed"
+      }`
+    );
+    if (!covered) {
+      out.push("       Fix (PowerShell as Administrator, once):");
+      out.push(
+        `       netsh advfirewall firewall add rule name="LUNARA Hub" dir=in action=allow protocol=TCP localport=${port} profile=private,domain`
+      );
+    }
+  } catch {
+    out.push("       (firewall check skipped — PowerShell not available)");
+  }
+  return out;
+}

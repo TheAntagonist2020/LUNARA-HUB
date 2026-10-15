@@ -188,7 +188,15 @@ and runs full-screen like a native app. Three tiers, all $0:
 1. Start the hub on your PC (`npm run dev` or `npm start`). The console now
    prints a line like `[phone] same Wi-Fi: http://192.168.1.23:3000` — if
    Windows asks about the firewall the first time, click **Allow**.
-2. Open that address in your phone's browser.
+2. Open that address in your phone's browser. If it never loads, run
+   `npm run doctor`: it prints the address and checks the Windows firewall.
+   The usual trap is that Node's "Allow" prompt only opened the **Public**
+   profile while home Wi-Fi is **Private**. One-time fix, in PowerShell run as
+   Administrator:
+
+   ```
+   netsh advfirewall firewall add rule name="LUNARA Hub" dir=in action=allow protocol=TCP localport=3000 profile=private,domain
+   ```
 3. Install it: **iPhone** — Share → *Add to Home Screen*. **Android** —
    menu (⋮) → *Add to Home screen* / *Install app*.
 
